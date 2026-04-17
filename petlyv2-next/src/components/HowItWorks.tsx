@@ -12,31 +12,21 @@ const HowItWorks = () => {
       title: 'Agende a Reserva',
       description: 'Escolha as datas e combine os detalhes diretamente com o cuidador.',
     },
-    {
-      icon: MessageSquareHeart,
-      title: 'Receba Fotos',
-      description: 'Acompanhe a rotina do seu pet com fotos e atualizações em tempo real.',
-    },
-    {
-      icon: CreditCard,
-      title: 'Pagamento Seguro',
-      description: 'Pague com total segurança e tenha suporte veterinário incluso.',
-    },
   ];
 
   return (
-    <section className="py-24 bg-white">
+    <section className="bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">
-            Como funciona o PetCare Connect
+            Como funciona o Petly
           </h2>
           <p className="text-gray-500 max-w-2xl mx-auto font-medium">
-            Tudo o que você precisa para viajar tranquilo e seu pet ficar feliz e seguro.
+            Tudo que você precisa para cuidar do seu pet quando você não pode estar lá. Simples, seguro e cheio de amor.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {steps.map((step, idx) => {
             const Icon = step.icon;
             return (
@@ -50,7 +40,7 @@ const HowItWorks = () => {
                   )}
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{step.description}</p>
+                <p className="text-gray-500 text-m leading-relaxed">{step.description}</p>
               </div>
             );
           })}

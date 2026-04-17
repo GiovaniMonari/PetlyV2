@@ -21,37 +21,6 @@ const Hero = ({ onSearch }: { onSearch: (val: string) => void }) => {
             <p className="text-lg text-gray-600 mb-8 max-w-lg">
               Conectamos tutores preocupados com cuidadores apaixonados e verificados. Hospedagem, passeios e carinho garantido.
             </p>
-
-            <div className="bg-white p-2 rounded-2xl shadow-xl flex flex-col md:flex-row gap-2 max-w-2xl border border-gray-100">
-              <div className="flex-1 flex items-center px-4 gap-2">
-                <Search className="w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Qual cidade você está?"
-                  className="w-full py-3 outline-none text-gray-700"
-                  onChange={(e) => onSearch(e.target.value)}
-                />
-              </div>
-              <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Buscar
-              </button>
-            </div>
-
-            <div className="mt-8 flex flex-wrap gap-6">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <ShieldCheck className="w-4 h-4 text-green-500" />
-                <span>Cuidadores Verificados</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4 text-blue-500" />
-                <span>Suporte 24/7</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Heart className="w-4 h-4 text-red-500" />
-                <span>Seguro Veterinário</span>
-              </div>
-            </div>
           </motion.div>
 
           <motion.div
@@ -68,17 +37,6 @@ const Hero = ({ onSearch }: { onSearch: (val: string) => void }) => {
               className="rounded-3xl shadow-2xl"
               priority
             />
-            <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <ShieldCheck className="text-green-600 w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-900">100% Seguro</p>
-                  <p className="text-xs text-gray-500">Pagamento Garantido</p>
-                </div>
-              </div>
-            </div>
           </motion.div>
         </div>
       </div>

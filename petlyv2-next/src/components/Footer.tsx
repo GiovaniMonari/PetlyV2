@@ -7,11 +7,8 @@ const Footer = () => {
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           <div className="col-span-2">
             <div className="flex items-center gap-2 mb-6">
-              <div className="bg-indigo-600 p-2 rounded-lg">
-                <PawPrint className="text-white w-6 h-6" />
-              </div>
               <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                PetCare Connect
+                Petly
               </span>
             </div>
             <p className="text-gray-600 max-w-md mb-8">
@@ -34,9 +31,6 @@ const Footer = () => {
             <h4 className="font-bold text-gray-900 mb-6">Explore</h4>
             <ul className="space-y-4 text-gray-600 text-sm">
               <li className="hover:text-indigo-600 cursor-pointer transition-colors">Como funciona</li>
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors">Seguro Veterinário</li>
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors">Blog</li>
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors">Carreiras</li>
             </ul>
           </div>
 
@@ -44,7 +38,7 @@ const Footer = () => {
             <h4 className="font-bold text-gray-900 mb-6">Suporte</h4>
             <ul className="space-y-4 text-gray-600 text-sm">
               <li className="hover:text-indigo-600 cursor-pointer transition-colors flex items-center gap-2">
-                <Mail className="w-4 h-4" /> contato@petcare.com.br
+                <Mail className="w-4 h-4" /> contato@petly.com.br
               </li>
               <li className="hover:text-indigo-600 cursor-pointer transition-colors flex items-center gap-2">
                 <Phone className="w-4 h-4" /> (11) 99999-9999
@@ -57,9 +51,6 @@ const Footer = () => {
         </div>
 
         <div className="pt-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-6">
-          <p className="text-gray-500 text-sm">
-            © 2026 PetCare Connect Ltda. Todos os direitos reservados.
-          </p>
           <div className="flex gap-8 text-sm text-gray-500">
             <span className="hover:text-indigo-600 cursor-pointer transition-colors">Termos de Uso</span>
             <span className="hover:text-indigo-600 cursor-pointer transition-colors">Privacidade</span>

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'PetCare Connect - Encontre o cuidador ideal para seu pet',
+  title: 'Petly Connect - Encontre o cuidador ideal para seu pet',
   description: 'A maior rede de cuidadores de pets do Brasil. Cuidamos com amor e responsabilidade.',
 };
 

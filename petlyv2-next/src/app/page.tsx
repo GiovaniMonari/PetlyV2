@@ -11,6 +11,7 @@ import HowItWorks from '@/components/HowItWorks';
 import { caregivers } from '@/data/caregivers';
 import { Search, Heart, ShieldCheck, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
+import FilterCards from '@/components/FilterBar';
 
 export default function HomePage() {
   const [selectedType, setSelectedType] = useState('all');
@@ -45,58 +46,16 @@ export default function HomePage() {
 
         <HowItWorks />
 
-        {/* Features Section */}
-        <section className="py-24 bg-white relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-3 gap-12">
-              <motion.div
-                whileHover={{ y: -5 }}
-                className="bg-indigo-50 p-10 rounded-[40px] border border-indigo-100"
-              >
-                <div className="bg-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-200">
-                  <ShieldCheck className="text-white w-8 h-8" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 tracking-tight">Cuidadores Verificados</h3>
-                <p className="text-gray-600 leading-relaxed font-medium">
-                  Realizamos uma checagem rigorosa de antecedentes e experiências de cada cuidador em nossa plataforma.
-                </p>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -5 }}
-                className="bg-purple-50 p-10 rounded-[40px] border border-purple-100"
-              >
-                <div className="bg-purple-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-purple-200">
-                  <Heart className="text-white w-8 h-8" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 tracking-tight">Seguro Veterinário</h3>
-                <p className="text-gray-600 leading-relaxed font-medium">
-                  Sua reserva inclui um seguro para emergências veterinárias, garantindo a tranquilidade do seu pet.
-                </p>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -5 }}
-                className="bg-blue-50 p-10 rounded-[40px] border border-blue-100"
-              >
-                <div className="bg-blue-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-200">
-                  <Star className="text-white w-8 h-8" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 tracking-tight">Avaliações Reais</h3>
-                <p className="text-gray-600 leading-relaxed font-medium">
-                  Veja o que outros tutores dizem sobre os cuidadores e tome a melhor decisão para o seu melhor amigo.
-                </p>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20">
+          <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
+            Encontre o cuidador perfeito para seu pet por categoria
+          </h3>
+        </div>
+      
         <div id="caregivers-section">
-          <FilterBar
+          <FilterCards
             selectedType={selectedType}
             onTypeChange={setSelectedType}
-            location={locationFilter}
-            onLocationChange={setLocationFilter}
           />
 
           <section className="py-20 bg-gray-50/50 min-h-[600px]">
@@ -104,7 +63,7 @@ export default function HomePage() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
                 <div>
                   <h2 className="text-3xl font-black text-gray-900 tracking-tight">
-                    Cuidadores recomendados
+                    Cuidadores encontrados
                   </h2>
                   <p className="text-gray-500 font-medium">
                     {filteredCaregivers.length} cuidadores disponíveis na sua região

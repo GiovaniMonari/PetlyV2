@@ -55,12 +55,6 @@ const BecomeCaregiverModal = ({
                     Defina seus próprios preços, horários e tipos de pets que aceita.
                   </p>
                 </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-6 h-6 text-indigo-300 shrink-0 mt-1" />
-                  <p className="text-sm text-indigo-100">
-                    Pagamentos seguros direto na sua conta bancária.
-                  </p>
-                </div>
               </div>
             </div>
 
