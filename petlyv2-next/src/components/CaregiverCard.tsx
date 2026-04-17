@@ -4,8 +4,15 @@ import Image from 'next/image';
 import { Star, MapPin, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Caregiver } from '@/data/caregivers';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
+  const router = useRouter();
+
+  const handleBooking = () => {
+    router.push(`/reserva/${caregiver.id}`);
+  };
+  
   return (
     <motion.div
       whileHover={{ y: -4 }}
@@ -62,7 +69,9 @@ const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
           </div>
         </div>
 
-        <button className="w-full bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 group-hover:bg-indigo-600 group-hover:text-white">
+        <button 
+        onClick={handleBooking}
+        className="w-full bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 group-hover:bg-indigo-600 group-hover:text-white">
           Reservar Agora
           <ChevronRight className="w-4 h-4" />
         </button>

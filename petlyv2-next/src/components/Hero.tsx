@@ -61,8 +61,8 @@ const Hero = ({ onSearch }: { onSearch: (val: string) => void }) => {
             className="hidden lg:block relative"
           >
             <Image
-              src="https://images.unsplash.com/photo-1541591419614-1be8121f6b44?q=80&w=800&auto=format&fit=crop"
-              alt="Cachorro feliz com cuidador"
+              src="https://images.unsplash.com/photo-1749808157576-6ff801a28db4?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+              alt="Cachorro feliz sendo acariciado"
               width={800}
               height={600}
               className="rounded-3xl shadow-2xl"
