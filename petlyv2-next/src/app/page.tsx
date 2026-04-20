@@ -37,13 +37,16 @@ export default function HomePage() {
         />
 
         {/* Filter Guide Section */}
-        <section className="bg-white py-16 md:py-20 border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+        <section className="relative py-16 md:py-20 border-b border-white/10 overflow-hidden">
+          {/* Subtle background glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#FF6B35]/5 blur-[120px] rounded-full pointer-events-none"></div>
+          
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Escolha o tipo de pet ideal
             </h2>
-            <p className="text-lg text-gray-600 leading-relaxed font-medium">
-              Cada pet tem necessidades únicas. Filtre por tipo para encontrar cuidadores especializados que entendem exatamente o que seu <span className="font-bold text-gray-900">cão, gato, pássaro ou outro pet</span> precisa. Nossos profissionais estão preparados para dar a melhor experiência.
+            <p className="text-lg text-gray-400 leading-relaxed font-medium">
+              Cada pet tem necessidades únicas. Filtre por tipo para encontrar cuidadores especializados que entendem exatamente o que seu <span className="font-bold text-white">cão, gato, pássaro ou outro pet</span> precisa. Nossos profissionais estão preparados para dar a melhor experiência.
             </p>
           </div>
         </section>
@@ -55,17 +58,17 @@ export default function HomePage() {
             onTypeChange={setSelectedType}
           />
 
-          <section className="py-20 md:py-24 bg-white border-b border-gray-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <section className="py-20 md:py-24 border-b border-white/10 relative">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
               <div className="mb-14">
                 <div className="inline-flex items-center gap-2 mb-4">
-                  <div className="w-1 h-6 bg-[#06A77D] rounded-full"></div>
-                  <span className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Profissionais</span>
+                  <div className="w-1 h-6 bg-[#06A77D] rounded-full shadow-[0_0_10px_rgba(6,167,125,0.8)]"></div>
+                  <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Profissionais</span>
                 </div>
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-2">
                   Cuidadores disponíveis
                 </h2>
-                <p className="text-lg text-gray-600 font-medium">{filteredCaregivers.length} profissional{filteredCaregivers.length !== 1 ? 'ais' : ''} encontrado{filteredCaregivers.length !== 1 ? 's' : ''}</p>
+                <p className="text-lg text-gray-400 font-medium">{filteredCaregivers.length} profissional{filteredCaregivers.length !== 1 ? 'ais' : ''} encontrado{filteredCaregivers.length !== 1 ? 's' : ''}</p>
               </div>
 
               {filteredCaregivers.length > 0 ? (
@@ -77,8 +80,8 @@ export default function HomePage() {
                   ))}
                 </div>
               ) : (
-                <div className="py-20 text-center">
-                  <p className="text-gray-600 font-medium mb-6 text-lg">Nenhum cuidador com esses filtros</p>
+                <div className="py-20 text-center bg-white/5 rounded-3xl border border-white/10 backdrop-blur-sm">
+                  <p className="text-gray-400 font-medium mb-6 text-lg">Nenhum cuidador com esses filtros</p>
                   <button
                     onClick={() => { setSelectedType('all'); setLocationFilter(''); }}
                     className="px-6 py-3 bg-[#FF6B35] text-white font-semibold rounded-lg hover:bg-[#E55A2B] active:scale-95 transition-all shadow-md"

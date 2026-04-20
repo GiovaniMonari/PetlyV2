@@ -14,10 +14,10 @@ const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
   
   return (
     <div
-      className="bg-white rounded-xl border border-gray-200 overflow-hidden transition-all hover:shadow-lg hover:border-gray-300 cursor-pointer group flex flex-col h-full"
+      className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden transition-all hover:shadow-xl hover:shadow-[#FF6B35]/10 hover:border-[#FF6B35]/50 cursor-pointer group flex flex-col h-full"
     >
       {/* Image Container */}
-      <div className="relative h-56 overflow-hidden bg-gray-100">
+      <div className="relative h-56 overflow-hidden bg-black/40">
         <Image
           src={caregiver.avatar}
           alt={caregiver.name}
@@ -27,7 +27,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
         />
         
         {/* Rating Badge */}
-        <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded text-xs font-semibold text-gray-700 flex items-center gap-1 shadow-sm">
+        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-xs font-semibold text-white border border-white/20 flex items-center gap-1 shadow-lg">
           <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
           {caregiver.rating}
         </div>
@@ -37,33 +37,33 @@ const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
       <div className="p-4 flex flex-col flex-1">
         
         {/* Name and Location */}
-        <h3 className="text-base font-bold text-gray-900 mb-1">
+        <h3 className="text-base font-bold text-white mb-1">
           {caregiver.name}
         </h3>
-        <div className="flex items-center gap-1 text-xs text-gray-600 mb-3">
+        <div className="flex items-center gap-1 text-xs text-gray-400 mb-3">
           <MapPin className="w-3 h-3" />
           {caregiver.location}
         </div>
 
         {/* Bio */}
-        <p className="text-xs text-gray-600 line-clamp-2 mb-3 flex-1">
+        <p className="text-xs text-gray-400 line-clamp-2 mb-3 flex-1">
           {caregiver.bio}
         </p>
 
         {/* Specialties */}
         <div className="mb-4 flex flex-wrap gap-1">
           {caregiver.specialties.slice(0, 2).map((s, idx) => (
-            <span key={idx} className="bg-gray-100 text-gray-700 text-xs font-semibold px-2 py-1 rounded">
+            <span key={idx} className="bg-white/10 text-gray-300 text-xs font-semibold px-2 py-1 rounded border border-white/5">
               {s}
             </span>
           ))}
         </div>
 
         {/* Price and Button */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+        <div className="flex items-center justify-between pt-4 border-t border-white/10">
           <div>
-            <p className="text-base font-bold text-gray-900">R$ {caregiver.price}</p>
-            <p className="text-xs text-gray-500 font-medium">/dia</p>
+            <p className="text-base font-bold text-white">R$ {caregiver.price}</p>
+            <p className="text-xs text-gray-400 font-medium">/dia</p>
           </div>
           <button
             onClick={handleBooking}

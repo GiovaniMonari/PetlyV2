@@ -2,7 +2,7 @@ import { PawPrint, Mail, Phone, ShieldCheck, MessageCircle, Globe, Share2 } from
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-900 text-white py-16 md:py-20 border-t border-gray-800">
+    <footer className="bg-[#050505] text-white py-16 md:py-20 border-t border-white/10 relative z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           
@@ -16,13 +16,13 @@ const Footer = () => {
               A maior rede de cuidadores de pets do Brasil. Cuidamos com amor e responsabilidade.
             </p>
             <div className="flex gap-3">
-              <button className="p-2.5 bg-gray-800 hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
+              <button className="p-2.5 bg-white/5 border border-white/10 hover:border-[#FF6B35] hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
                 <MessageCircle className="w-4 h-4" />
               </button>
-              <button className="p-2.5 bg-gray-800 hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
+              <button className="p-2.5 bg-white/5 border border-white/10 hover:border-[#FF6B35] hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
                 <Globe className="w-4 h-4" />
               </button>
-              <button className="p-2.5 bg-gray-800 hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
+              <button className="p-2.5 bg-white/5 border border-white/10 hover:border-[#FF6B35] hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
                 <Share2 className="w-4 h-4" />
               </button>
             </div>
@@ -66,7 +66,7 @@ const Footer = () => {
         </div>
 
         {/* Bottom */}
-        <div className="pt-10 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="pt-10 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-gray-400 text-sm font-medium">
             © 2024 Petly. Todos os direitos reservados.
           </p>

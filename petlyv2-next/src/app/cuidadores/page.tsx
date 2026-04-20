@@ -75,15 +75,18 @@ export default function CuidadoresPage() {
         onBeCaregiverClick={() => setIsModalOpen(true)}
       />
 
-      <main className="min-h-screen bg-white">
+      <main className="min-h-screen bg-transparent">
         {/* Page header */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="border-b border-white/10 relative overflow-hidden">
+          {/* Subtle glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#2E86AB]/10 blur-[100px] rounded-full pointer-events-none"></div>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
             <div className="mb-8">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
+              <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
                 Encontre seu cuidador
               </h1>
-              <p className="text-lg text-gray-600">
+              <p className="text-lg text-gray-400">
                 {filtered.length} profissional{filtered.length !== 1 ? 'ais' : ''} disponível{filtered.length !== 1 ? 'eis' : ''}
               </p>
             </div>
@@ -97,14 +100,14 @@ export default function CuidadoresPage() {
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
                   placeholder="Buscar por cidade..."
-                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#FF6B35] outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                 />
                 {locationFilter && (
                   <button
                     onClick={() => setLocationFilter('')}
                     className="absolute right-3 top-1/2 -translate-y-1/2"
                   >
-                    <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+                    <X className="w-4 h-4 text-gray-400 hover:text-white" />
                   </button>
                 )}
               </div>
@@ -113,8 +116,8 @@ export default function CuidadoresPage() {
                 onClick={() => setShowFilters((v) => !v)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm border transition-all ${
                   showFilters || hasActiveFilters
-                    ? 'bg-[#FF6B35] text-white border-[#FF6B35]'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                    ? 'bg-[#FF6B35] text-white border-[#FF6B35] shadow-[0_0_15px_rgba(255,107,53,0.3)]'
+                    : 'bg-white/5 text-gray-300 border-white/10 hover:border-white/30 hover:bg-white/10 backdrop-blur-sm'
                 }`}
               >
                 <SlidersHorizontal className="w-4 h-4" />
@@ -126,7 +129,7 @@ export default function CuidadoresPage() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="appearance-none pl-4 pr-10 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-600 focus:ring-2 focus:ring-[#FF6B35] outline-none cursor-pointer transition-all"
+                  className="appearance-none pl-4 pr-10 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-sm font-semibold text-gray-300 focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none cursor-pointer transition-all shadow-sm"
                 >
                   {SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -142,7 +145,7 @@ export default function CuidadoresPage() {
 
         {/* Expandable filter panel */}
         {showFilters && (
-          <div className="bg-white border-b border-gray-200">
+          <div className="bg-black/30 border-b border-white/10 backdrop-blur-md relative z-10">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6 items-start lg:items-end">
               {/* Pet type */}
               <div>
@@ -159,8 +162,8 @@ export default function CuidadoresPage() {
                         onClick={() => setSelectedType(type.id)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm border transition-all ${
                           active
-                            ? 'bg-[#FF6B35] text-white border-[#FF6B35]'
-                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                            ? 'bg-[#FF6B35] text-white border-[#FF6B35] shadow-[0_0_15px_rgba(255,107,53,0.3)]'
+                            : 'bg-white/5 text-gray-300 border-white/10 hover:border-white/30 hover:bg-white/10'
                         }`}
                       >
                         <Icon className="w-4 h-4" />
@@ -183,7 +186,7 @@ export default function CuidadoresPage() {
                   step={5}
                   value={priceMax}
                   onChange={(e) => setPriceMax(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer accent-[#FF6B35]"
+                  className="w-full h-2 bg-white/20 rounded-full appearance-none cursor-pointer accent-[#FF6B35]"
                 />
                 <div className="flex justify-between text-xs font-semibold text-gray-500 mt-2">
                   <span>R$ 20</span>
@@ -216,13 +219,13 @@ export default function CuidadoresPage() {
             </div>
           ) : (
             <div className="py-20 flex flex-col items-center text-center">
-              <div className="bg-gray-100 p-8 rounded-2xl mb-6">
-                <Search className="w-12 h-12 text-gray-400 mx-auto" />
+              <div className="bg-white/5 border border-white/10 backdrop-blur-sm p-8 rounded-2xl mb-6 shadow-xl">
+                <Search className="w-12 h-12 text-gray-500 mx-auto" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              <h3 className="text-2xl font-bold text-white mb-2">
                 Nenhum cuidador encontrado
               </h3>
-              <p className="text-gray-600 max-w-md font-medium mb-6">
+              <p className="text-gray-400 max-w-md font-medium mb-6">
                 Não encontramos cuidadores que correspondem aos seus filtros. Tente ajustar os critérios de busca.
               </p>
               <button
@@ -236,8 +239,11 @@ export default function CuidadoresPage() {
         </div>
 
         {/* Bottom CTA */}
-        <div className="bg-[#FF6B35] py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="bg-gradient-to-r from-[#FF6B35] to-[#A23B72] py-16 relative overflow-hidden">
+          {/* subtle decorative circles */}
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
+          
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
               Você cuida de pets com carinho?
             </h2>
