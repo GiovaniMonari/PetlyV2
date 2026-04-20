@@ -2,59 +2,78 @@ import { PawPrint, Mail, Phone, ShieldCheck, MessageCircle, Globe, Share2 } from
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-50 border-t border-gray-100 py-16">
+    <footer className="bg-gray-900 text-white py-16 md:py-20 border-t border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-4 gap-12 mb-12">
-          <div className="col-span-2">
-            <div className="flex items-center gap-2 mb-6">
-              <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Petly
-              </span>
+          
+          {/* Brand Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <PawPrint className="w-6 h-6 text-[#FF6B35]" />
+              <span className="text-xl font-bold">Petly</span>
             </div>
-            <p className="text-gray-600 max-w-md mb-8">
-              A maior rede de cuidadores de pets do Brasil. Cuidamos com amor e responsabilidade para que você possa viajar com tranquilidade.
+            <p className="text-gray-400 text-sm max-w-md mb-6 leading-relaxed">
+              A maior rede de cuidadores de pets do Brasil. Cuidamos com amor e responsabilidade.
             </p>
-            <div className="flex gap-4">
-              <button className="p-3 bg-white shadow-sm hover:shadow-md rounded-full text-indigo-600 hover:text-white hover:bg-indigo-600 transition-all">
-                <MessageCircle className="w-5 h-5" />
+            <div className="flex gap-3">
+              <button className="p-2.5 bg-gray-800 hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
+                <MessageCircle className="w-4 h-4" />
               </button>
-              <button className="p-3 bg-white shadow-sm hover:shadow-md rounded-full text-indigo-600 hover:text-white hover:bg-indigo-600 transition-all">
-                <Globe className="w-5 h-5" />
+              <button className="p-2.5 bg-gray-800 hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
+                <Globe className="w-4 h-4" />
               </button>
-              <button className="p-3 bg-white shadow-sm hover:shadow-md rounded-full text-indigo-600 hover:text-white hover:bg-indigo-600 transition-all">
-                <Share2 className="w-5 h-5" />
+              <button className="p-2.5 bg-gray-800 hover:bg-[#FF6B35] rounded-full transition-all active:scale-95 shadow-sm">
+                <Share2 className="w-4 h-4" />
               </button>
             </div>
           </div>
 
+          {/* Links */}
           <div>
-            <h4 className="font-bold text-gray-900 mb-6">Explore</h4>
-            <ul className="space-y-4 text-gray-600 text-sm">
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors">Como funciona</li>
+            <h4 className="font-bold text-white mb-4 font-semibold">Explore</h4>
+            <ul className="space-y-3 text-gray-400 text-sm">
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors font-medium">Como funciona</li>
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors font-medium">Encontrar Cuidador</li>
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors font-medium">Ser Cuidador</li>
             </ul>
           </div>
 
+          {/* Support */}
           <div>
-            <h4 className="font-bold text-gray-900 mb-6">Suporte</h4>
-            <ul className="space-y-4 text-gray-600 text-sm">
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors flex items-center gap-2">
-                <Mail className="w-4 h-4" /> contato@petly.com.br
+            <h4 className="font-bold text-white mb-4 font-semibold">Suporte</h4>
+            <ul className="space-y-3 text-gray-400 text-sm">
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors flex items-center gap-2 font-medium">
+                <Mail className="w-4 h-4" /> contato@petly.com
               </li>
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors flex items-center gap-2">
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors flex items-center gap-2 font-medium">
                 <Phone className="w-4 h-4" /> (11) 99999-9999
               </li>
-              <li className="hover:text-indigo-600 cursor-pointer transition-colors flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4" /> Central de Segurança
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors flex items-center gap-2 font-medium">
+                <ShieldCheck className="w-4 h-4" /> Segurança
               </li>
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <h4 className="font-bold text-white mb-4 font-semibold">Legal</h4>
+            <ul className="space-y-3 text-gray-400 text-sm">
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors font-medium">Termos de Uso</li>
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors font-medium">Privacidade</li>
+              <li className="hover:text-[#FF6B35] cursor-pointer transition-colors font-medium">Cookies</li>
             </ul>
           </div>
         </div>
 
-        <div className="pt-12 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex gap-8 text-sm text-gray-500">
-            <span className="hover:text-indigo-600 cursor-pointer transition-colors">Termos de Uso</span>
-            <span className="hover:text-indigo-600 cursor-pointer transition-colors">Privacidade</span>
-            <span className="hover:text-indigo-600 cursor-pointer transition-colors">Cookies</span>
+        {/* Bottom */}
+        <div className="pt-10 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-gray-400 text-sm font-medium">
+            © 2024 Petly. Todos os direitos reservados.
+          </p>
+          <div className="flex gap-6 text-gray-400 text-sm font-medium">
+            <span className="hover:text-[#FF6B35] cursor-pointer transition-colors">Português</span>
+            <span className="hover:text-[#FF6B35] cursor-pointer transition-colors">English</span>
+            <span className="hover:text-[#FF6B35] cursor-pointer transition-colors">Español</span>
           </div>
         </div>
       </div>

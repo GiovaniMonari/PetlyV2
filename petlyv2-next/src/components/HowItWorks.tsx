@@ -2,45 +2,34 @@ import { Search, CalendarCheck, MessageSquareHeart, CreditCard } from 'lucide-re
 
 const HowItWorks = () => {
   const steps = [
-    {
-      icon: Search,
-      title: 'Busque Cuidadores',
-      description: 'Encontre cuidadores avaliados e apaixonados por pets perto de você.',
-    },
-    {
-      icon: CalendarCheck,
-      title: 'Agende a Reserva',
-      description: 'Escolha as datas e combine os detalhes diretamente com o cuidador.',
-    },
+    { icon: Search, title: 'Busque', description: 'Encontre cuidadores perto de você' },
+    { icon: CalendarCheck, title: 'Agende', description: 'Escolha datas e detalhes' },
+    { icon: MessageSquareHeart, title: 'Comunique', description: 'Fale com o cuidador' },
+    { icon: CreditCard, title: 'Pague', description: 'Pagamento seguro' },
   ];
 
   return (
-    <section className="bg-white">
+    <section className="bg-gray-50 py-20 md:py-24 border-t border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">
-            Como funciona o Petly
-          </h2>
-          <p className="text-gray-500 max-w-2xl mx-auto font-medium">
-            Tudo que você precisa para cuidar do seu pet quando você não pode estar lá. Simples, seguro e cheio de amor.
-          </p>
+        <div className="mb-14">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="w-1 h-6 bg-[#2E86AB] rounded-full"></div>
+            <span className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Processo</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">Como funciona</h2>
+          <p className="text-lg text-gray-600 font-medium">Simples, seguro e com tudo que você precisa</p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {steps.map((step, idx) => {
             const Icon = step.icon;
             return (
-              <div key={idx} className="flex flex-col items-center text-center group">
-                <div className="relative mb-8">
-                  <div className="w-20 h-20 bg-indigo-50 rounded-[32px] flex items-center justify-center group-hover:bg-indigo-600 transition-all duration-500 rotate-12 group-hover:rotate-0">
-                    <Icon className="w-10 h-10 text-indigo-600 group-hover:text-white transition-colors duration-500" />
-                  </div>
-                  {idx < steps.length - 1 && (
-                    <div className="hidden md:block absolute top-10 left-[120%] w-[100%] border-t-2 border-dashed border-gray-100" />
-                  )}
+              <div key={idx} className="group">
+                <div className="w-16 h-16 bg-[#FF6B35] rounded-xl flex items-center justify-center text-white mb-5 group-hover:shadow-lg transition-all">
+                  <Icon className="w-8 h-8" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
-                <p className="text-gray-500 text-m leading-relaxed">{step.description}</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">{step.title}</h3>
+                <p className="text-gray-600 leading-relaxed">{step.description}</p>
               </div>
             );
           })}

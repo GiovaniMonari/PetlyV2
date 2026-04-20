@@ -2,12 +2,56 @@
 
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --color-petly-primary: rgb(255, 107, 53);
+  --color-petly-secondary: rgb(46, 134, 171);
+  --color-petly-accent: rgb(162, 59, 114);
+  --color-petly-success: rgb(6, 167, 125);
+  --color-petly-warm: rgb(247, 127, 0);
+  --color-petly-light-bg: rgb(255, 245, 238);
+  --color-petly-dark: rgb(26, 37, 50);
 }
 
-@utility no-scrollbar {
-  &::-webkit-scrollbar {
-    display: none;
+@layer utilities {
+  .petly-gradient-primary {
+    @apply bg-gradient-to-r from-[#FF6B35] via-[#F77F00] to-[#FF6B35];
   }
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+
+  .petly-gradient-secondary {
+    @apply bg-gradient-to-r from-[#2E86AB] to-[#06A77D];
+  }
+
+  .petly-gradient-accent {
+    @apply bg-gradient-to-r from-[#A23B72] to-[#FF6B35];
+  }
+
+  .petly-shadow-soft {
+    @apply shadow-lg shadow-[rgba(255,107,53,0.15)];
+  }
+
+  .petly-shadow-medium {
+    @apply shadow-xl shadow-[rgba(46,134,171,0.2)];
+  }
+
+  .petly-text-gradient {
+    @apply bg-gradient-to-r from-[#FF6B35] to-[#A23B72] bg-clip-text text-transparent;
+  }
+
+  .no-scrollbar {
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgb(255, 107, 53);
+  color: white;
 }

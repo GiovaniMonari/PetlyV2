@@ -1,6 +1,4 @@
-'use client';
-
-import { Dog, Cat, Bird, MoreHorizontal, Rat, } from 'lucide-react';
+import { Bird, Cat, Dog, MoreHorizontal, Rat } from "lucide-react";
 
 const FilterCards = ({
   selectedType,
@@ -18,10 +16,15 @@ const FilterCards = ({
   ];
 
   return (
-    <div className="py-8">
+    <section className="py-10 bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-1 h-5 bg-[#A23B72] rounded-full"></div>
+          <p className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Filtrar por tipo de pet</p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {types.map((type) => {
             const Icon = type.icon;
             const isActive = selectedType === type.id;
@@ -30,10 +33,10 @@ const FilterCards = ({
               <button
                 key={type.id}
                 onClick={() => onTypeChange(type.id)}
-                className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all ${
+                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
                   isActive
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg scale-105'
-                    : 'bg-white text-gray-500 border-gray-100 hover:border-indigo-200 hover:shadow-md'
+                    ? 'bg-[#FF6B35] text-white border-[#FF6B35] shadow-md'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#FF6B35] hover:shadow-sm'
                 }`}
               >
                 <Icon className="w-6 h-6 mb-2" />
@@ -44,9 +47,8 @@ const FilterCards = ({
             );
           })}
         </div>
-
       </div>
-    </div>
+    </section>
   );
 };
 
