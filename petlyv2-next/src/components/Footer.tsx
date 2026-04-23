@@ -70,11 +70,6 @@ const Footer = () => {
           <p className="text-gray-400 text-sm font-medium">
             © 2024 Petly. Todos os direitos reservados.
           </p>
-          <div className="flex gap-6 text-gray-400 text-sm font-medium">
-            <span className="hover:text-[#FF6B35] cursor-pointer transition-colors">Português</span>
-            <span className="hover:text-[#FF6B35] cursor-pointer transition-colors">English</span>
-            <span className="hover:text-[#FF6B35] cursor-pointer transition-colors">Español</span>
-          </div>
         </div>
       </div>
     </footer>

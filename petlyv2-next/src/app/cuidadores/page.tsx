@@ -236,28 +236,7 @@ export default function CuidadoresPage() {
               </button>
             </div>
           )}
-        </div>
-
-        {/* Bottom CTA */}
-        <div className="bg-gradient-to-r from-[#FF6B35] to-[#A23B72] py-16 relative overflow-hidden">
-          {/* subtle decorative circles */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
-          
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-              Você cuida de pets com carinho?
-            </h2>
-            <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto">
-              Cadastre-se como cuidador e comece a ganhar cuidando de pets.
-            </p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-white text-[#FF6B35] px-8 py-3 rounded-lg font-bold hover:bg-gray-50 transition-all"
-            >
-              Ser um Cuidador
-            </button>
-          </div>
-        </div>
+        </div> 
       </main>
 
       <Footer />
