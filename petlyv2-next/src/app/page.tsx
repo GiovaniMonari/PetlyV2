@@ -16,9 +16,16 @@ export default function HomePage() {
   const [isBecomeCaregiverModalOpen, setIsBecomeCaregiverModalOpen] = useState(false);
 
   const filteredCaregivers = useMemo(() => {
+    const normalizeLoc = (loc: string) => 
+      loc.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     return caregivers.filter(caregiver => {
       const matchesType = selectedType === 'all' || caregiver.type === selectedType;
-      const matchesLocation = caregiver.location.toLowerCase().includes(locationFilter.toLowerCase());
+      
+      const normCLoc = normalizeLoc(caregiver.location);
+      const normFilter = normalizeLoc(locationFilter);
+      const matchesLocation = !normFilter || normCLoc.includes(normFilter) || normFilter.includes(normCLoc);
+
       return matchesType && matchesLocation;
     });
   }, [selectedType, locationFilter]);

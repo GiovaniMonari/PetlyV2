@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CaregiverCard from '@/components/CaregiverCard';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
 import { caregivers } from '@/data/caregivers';
+import { useSearchParams } from 'next/navigation';
 import {
   Search,
   SlidersHorizontal,
@@ -34,20 +35,35 @@ const SORT_OPTIONS = [
   { value: 'rating', label: 'Melhor avaliação' },
 ];
 
-export default function CuidadoresPage() {
+function CuidadoresPageContent() {
+  const searchParams = useSearchParams();
+  const initialLocation = searchParams.get('location') || '';
+
   const [selectedType, setSelectedType] = useState('all');
-  const [locationFilter, setLocationFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState(initialLocation);
   const [sortBy, setSortBy] = useState('relevance');
+
+  useEffect(() => {
+    const loc = searchParams.get('location');
+    if (loc !== null) {
+      setLocationFilter(loc);
+    }
+  }, [searchParams]);
   const [priceMax, setPriceMax] = useState(200);
   const [showFilters, setShowFilters] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const filtered = useMemo(() => {
+    const normalizeLoc = (loc: string) => 
+      loc.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     let list = caregivers.filter((c) => {
       const matchesType = selectedType === 'all' || c.type === selectedType;
-      const matchesLocation = c.location
-        .toLowerCase()
-        .includes(locationFilter.toLowerCase());
+      
+      const normCLoc = normalizeLoc(c.location);
+      const normFilter = normalizeLoc(locationFilter);
+      const matchesLocation = !normFilter || normCLoc.includes(normFilter) || normFilter.includes(normCLoc);
+
       const matchesPrice = c.price <= priceMax;
       return matchesType && matchesLocation && matchesPrice;
     });
@@ -245,5 +261,13 @@ export default function CuidadoresPage() {
         onClose={() => setIsModalOpen(false)}
       />
     </>
+  );
+}
+
+export default function CuidadoresPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center text-white">Carregando...</div>}>
+      <CuidadoresPageContent />
+    </Suspense>
   );
 }

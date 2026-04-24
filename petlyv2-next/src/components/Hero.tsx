@@ -1,8 +1,53 @@
 'use client';
 
-import { Search, Heart, Shield, Zap, CalendarCheck, MessageSquareHeart, CreditCard } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Search, Heart, Shield, Zap, CalendarCheck, MessageSquareHeart, CreditCard, MapPin, Loader2 } from 'lucide-react';
+import { searchLocation } from '@/utils/location';
 
-const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch: (val: string) => void; onBecomeCaregiverClick?: () => void }) => {
+const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch?: (val: string) => void; onBecomeCaregiverClick?: () => void }) => {
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (query.length >= 3) {
+        setLoading(true);
+        const results = await searchLocation(query);
+        setSuggestions(results);
+        setLoading(false);
+      } else {
+        setSuggestions([]);
+      }
+    };
+
+    const debounceTimer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [query]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearch = (searchTerm: string) => {
+    setQuery(searchTerm);
+    setShowSuggestions(false);
+    if (onSearch) onSearch(searchTerm);
+    if (searchTerm.trim()) {
+      router.push(`/cuidadores?location=${encodeURIComponent(searchTerm)}`);
+    }
+  };
+
   const steps = [
     { icon: Search, title: 'Busque', description: 'Encontre cuidadores perto de você' },
     { icon: CalendarCheck, title: 'Agende', description: 'Escolha datas e detalhes' },
@@ -35,20 +80,52 @@ const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch: (val: string) =>
           </p>
 
           {/* Search Bar */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-2xl mx-auto mb-20">
-            <input
-              type="text"
-              placeholder="Sua cidade"
-              onChange={(e) => onSearch(e.target.value)}
-              className="flex-1 px-6 py-4 rounded-xl border border-white/30 text-lg focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent bg-white/10 backdrop-blur-md text-white placeholder-white/60 shadow-lg hover:shadow-xl transition-all"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-2xl mx-auto mb-20 relative" ref={dropdownRef}>
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Sua cidade"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setShowSuggestions(true);
+                  if (onSearch) onSearch(e.target.value);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                className="w-full px-6 py-4 rounded-xl border border-white/30 text-lg focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent bg-white/10 backdrop-blur-md text-white placeholder-white/60 shadow-lg hover:shadow-xl transition-all"
+              />
+              
+              {/* Dropdown de sugestões */}
+              {showSuggestions && (query.length >= 3) && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-white/20 rounded-xl shadow-2xl overflow-hidden z-50">
+                  {loading ? (
+                    <div className="p-4 flex items-center justify-center text-gray-400">
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Buscando...
+                    </div>
+                  ) : suggestions.length > 0 ? (
+                    <ul className="max-h-60 overflow-y-auto">
+                      {suggestions.map((suggestion, index) => (
+                        <li key={index}>
+                          <button
+                            onClick={() => handleSearch(suggestion)}
+                            className="w-full text-left px-4 py-3 hover:bg-white/10 text-gray-200 flex items-center transition-colors"
+                          >
+                            <MapPin className="w-4 h-4 mr-3 text-gray-400" />
+                            {suggestion}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="p-4 text-gray-400 text-center">Nenhuma cidade encontrada</div>
+                  )}
+                </div>
+              )}
+            </div>
+            
             <button
-              onClick={() => {
-                const section = document.getElementById('caregivers-section');
-                if (section) {
-                  section.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}
+              onClick={() => handleSearch(query)}
               className="px-10 py-4 bg-[#FF6B35] text-white font-bold rounded-xl hover:bg-[#E55A2B] active:scale-95 transition-all flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl text-lg whitespace-nowrap"
             >
               <Search className="w-5 h-5" />
