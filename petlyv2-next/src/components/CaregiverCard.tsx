@@ -2,29 +2,35 @@
 
 import Image from 'next/image';
 import { Star, MapPin, CheckCircle2, ChevronRight } from 'lucide-react';
-import { Caregiver } from '@/data/caregivers';
 import { useRouter } from 'next/navigation';
 
-const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
+const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
   const router = useRouter();
 
-  const handleBooking = () => {
-    router.push(`/reserva/${caregiver.id}`);
+  const openCaregiverPage = () => {
+    router.push(`/cuidadores/${caregiver.id}`);
   };
   
   return (
     <div
+      onClick={openCaregiverPage}
       className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden transition-all hover:shadow-xl hover:shadow-[#FF6B35]/10 hover:border-[#FF6B35]/50 cursor-pointer group flex flex-col h-full"
     >
       {/* Image Container */}
-      <div className="relative h-56 overflow-hidden bg-black/40">
-        <Image
-          src={caregiver.avatar}
-          alt={caregiver.name}
-          fill
-          className="object-cover transition-transform duration-300 group-hover:scale-110"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-        />
+      <div className="relative h-56 overflow-hidden bg-black/40 flex items-center justify-center">
+        {caregiver.avatar ? (
+          <Image
+            src={caregiver.avatar}
+            alt={caregiver.name}
+            fill
+            className="object-cover transition-transform duration-300 group-hover:scale-110"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          />
+        ) : (
+          <div className="w-full h-full bg-gray-800 flex items-center justify-center group-hover:bg-gray-700 transition-colors">
+            <span className="text-gray-500 font-bold text-4xl uppercase">{caregiver.name.charAt(0)}</span>
+          </div>
+        )}
         
         {/* Rating Badge */}
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-xs font-semibold text-white border border-white/20 flex items-center gap-1 shadow-lg">
@@ -52,7 +58,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
 
         {/* Specialties */}
         <div className="mb-4 flex flex-wrap gap-1">
-          {caregiver.specialties.slice(0, 2).map((s, idx) => (
+          {caregiver.specialties.slice(0, 2).map((s: string, idx: number) => (
             <span key={idx} className="bg-white/10 text-gray-300 text-xs font-semibold px-2 py-1 rounded border border-white/5">
               {s}
             </span>
@@ -66,10 +72,13 @@ const CaregiverCard = ({ caregiver }: { caregiver: Caregiver }) => {
             <p className="text-xs text-gray-400 font-medium">/dia</p>
           </div>
           <button
-            onClick={handleBooking}
+            onClick={(event) => {
+              event.stopPropagation();
+              openCaregiverPage();
+            }}
             className="bg-[#FF6B35] text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-[#E55A2B] active:scale-95 transition-all shadow-sm"
           >
-            Reservar
+            Ver perfil
           </button>
         </div>
       </div>

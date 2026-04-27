@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Heart, Shield, Zap, CalendarCheck, MessageSquareHeart, CreditCard, MapPin, Loader2 } from 'lucide-react';
 import { searchLocation } from '@/utils/location';
@@ -169,12 +170,12 @@ const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch?: (val: string) =
           <p className="text-white/80 mb-8 mx-auto text-lg">
             Ganhe dinheiro cuidando de pets. Total controle de seu tempo, sem experiência necessária.
           </p>
-          <button
-            onClick={onBecomeCaregiverClick}
-            className="px-10 py-4 bg-gradient-to-r from-[#FF6B35] to-[#F77F00] text-white font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-xl hover:shadow-2xl text-lg"
+          <Link
+            href="/cadastro"
+            className="inline-block px-10 py-4 bg-gradient-to-r from-[#FF6B35] to-[#F77F00] text-white font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-xl hover:shadow-2xl text-lg"
           >
             Começar como Cuidador
-          </button>
+          </Link>
         </div>
       </div>
     </div>

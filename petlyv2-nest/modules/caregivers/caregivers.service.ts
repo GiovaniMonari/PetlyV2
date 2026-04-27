@@ -13,6 +13,7 @@ import {
 import { UpdateCaregiverDto } from "./dto/update-caregiver.dto";
 import { ServiceDto } from "./dto/service-dto";
 import { UpdateServiceDto } from "./dto/update-services.dto";
+import * as bcrypt from "bcrypt";
 
 const SERVICE_DEFAULTS: Record<
   ServiceDto["type"],
@@ -65,7 +66,14 @@ export class CaregiversService {
   async create(
     createCaregiverDto: CreateCaregiverDto,
   ): Promise<CaregiverDocument> {
-    const createdCaregiver = new this.caregiverModel(createCaregiverDto);
+    // Hash the password before saving
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(createCaregiverDto.password, salt);
+
+    const createdCaregiver = new this.caregiverModel({
+      ...createCaregiverDto,
+      password: hashedPassword,
+    });
     return createdCaregiver.save();
   }
 
@@ -74,7 +82,7 @@ export class CaregiversService {
       throw new NotFoundException("ID inválido");
     }
 
-    const caregiver = await this.caregiverModel.findById(id).exec();
+    const caregiver = await this.caregiverModel.findById(id).select('-password -cpf').exec();
 
     if (!caregiver) {
       throw new NotFoundException("Caregiver não encontrado");
@@ -84,17 +92,73 @@ export class CaregiversService {
   }
 
   async findAll(): Promise<CaregiverDocument[]> {
-    return this.caregiverModel.find().exec();
+    return this.caregiverModel.find({ isActive: true }).select('-password -cpf').exec();
+  }
+
+  /**
+   * Filtered search - matches frontend /cuidadores filters:
+   * - type (dog, cat, bird, other)
+   * - location (partial match, case-insensitive)
+   * - maxPrice
+   * - sortBy (price_asc, price_desc, rating, relevance)
+   * - specialty
+   */
+  async findFiltered(filters: {
+    type?: CaregiverType;
+    location?: string;
+    maxPrice?: number;
+    sortBy?: string;
+    specialty?: string;
+  }): Promise<CaregiverDocument[]> {
+    const query: any = { isActive: { $ne: false } };
+
+    if (filters.type) {
+      query.type = filters.type;
+    }
+
+    if (filters.location) {
+      // Normalize for accent-insensitive search
+      query.location = { $regex: filters.location, $options: 'i' };
+    }
+
+    if (filters.maxPrice) {
+      query.price = { $lte: filters.maxPrice };
+    }
+
+    if (filters.specialty) {
+      query.specialties = { $regex: filters.specialty, $options: 'i' };
+    }
+
+    let sortOption: any = {};
+    switch (filters.sortBy) {
+      case 'price_asc':
+        sortOption = { price: 1 };
+        break;
+      case 'price_desc':
+        sortOption = { price: -1 };
+        break;
+      case 'rating':
+        sortOption = { rating: -1 };
+        break;
+      default:
+        sortOption = { createdAt: -1 };
+    }
+
+    return this.caregiverModel
+      .find(query)
+      .select('-password -cpf')
+      .sort(sortOption)
+      .exec();
   }
 
   async findByType(type: CaregiverType): Promise<CaregiverDocument[]> {
-    return this.caregiverModel.find({ types: type }).exec();
+    return this.caregiverModel.find({ type, isActive: { $ne: false } }).select('-password -cpf').exec();
   }
 
   async findBySpecialty(
     specialty: string,
   ): Promise<CaregiverDocument[]> {
-    return this.caregiverModel.find({ specialties: specialty }).exec();
+    return this.caregiverModel.find({ specialties: specialty, isActive: { $ne: false } }).select('-password -cpf').exec();
   }
 
   async update(

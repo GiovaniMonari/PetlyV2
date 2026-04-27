@@ -3,6 +3,8 @@
 import { X, CheckCircle, Mail, MapPin, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { searchLocation } from '@/utils/location';
+import { apiRegister } from '@/utils/api';
+import { useRouter } from 'next/navigation';
 
 const BecomeCaregiverModal = ({
   isOpen,
@@ -12,6 +14,7 @@ const BecomeCaregiverModal = ({
   onClose: () => void;
 }) => {
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
     password: '',
     cpf: '',
@@ -19,6 +22,7 @@ const BecomeCaregiverModal = ({
   });
 
   const [errors, setErrors] = useState({
+    name: '',
     email: '',
     password: '',
     cpf: '',
@@ -31,16 +35,20 @@ const BecomeCaregiverModal = ({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const router = useRouter();
 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (!isOpen) {
-      setFormData({ email: '', password: '', cpf: '', location: '' });
-      setErrors({ email: '', password: '', cpf: '', location: '' });
+      setFormData({ name: '', email: '', password: '', cpf: '', location: '' });
+      setErrors({ name: '', email: '', password: '', cpf: '', location: '' });
       setTouched({});
       setShowPassword(false);
       setSuggestions([]);
       setShowSuggestions(false);
+      setApiError('');
     }
   }, [isOpen]);
 
@@ -100,22 +108,19 @@ const BecomeCaregiverModal = ({
 
   const validateField = (name: string, value: string) => {
     let error = '';
-    switch (name) {
-      case 'email':
-        if (!value) error = 'Email é obrigatório';
-        else if (!isValidEmail(value)) error = 'Email inválido';
-        break;
-      case 'cpf':
-        if (!value) error = 'CPF é obrigatório';
-        else if (!isValidCPF(value)) error = 'CPF inválido';
-        break;
-      case 'location':
-        if (!value) error = 'Localização é obrigatória';
-        break;
-      case 'password':
-        if (!value) error = 'Senha é obrigatória';
-        else if (value.length < 6) error = 'A senha deve ter pelo menos 6 caracteres';
-        break;
+    if (name === 'name') {
+      if (!value.trim()) error = 'Nome completo é obrigatório';
+    } else if (name === 'email') {
+      if (!value) error = 'Email é obrigatório';
+      else if (!isValidEmail(value)) error = 'Email inválido';
+    } else if (name === 'cpf') {
+      if (!value) error = 'CPF é obrigatório';
+      else if (!isValidCPF(value)) error = 'CPF inválido';
+    } else if (name === 'location') {
+      if (!value) error = 'Localização é obrigatória';
+    } else if (name === 'password') {
+      if (!value) error = 'Senha é obrigatória';
+      else if (value.length < 6) error = 'A senha deve ter pelo menos 6 caracteres';
     }
     setErrors((prev) => ({ ...prev, [name]: error }));
     return !error;
@@ -142,19 +147,40 @@ const BecomeCaregiverModal = ({
     validateField(name, value);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setApiError('');
     
+    const isNameValid = validateField('name', formData.name);
     const isEmailValid = validateField('email', formData.email);
     const isCpfValid = validateField('cpf', formData.cpf);
     const isLocationValid = validateField('location', formData.location);
     const isPasswordValid = validateField('password', formData.password);
 
-    setTouched({ email: true, cpf: true, location: true, password: true });
+    setTouched({ name: true, email: true, cpf: true, location: true, password: true });
 
-    if (isEmailValid && isCpfValid && isLocationValid && isPasswordValid) {
-      alert('Conta criada com sucesso!');
+    if (!(isNameValid && isEmailValid && isCpfValid && isLocationValid && isPasswordValid)) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await apiRegister({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        cpf: formData.cpf.replace(/\D/g, ''),
+        location: formData.location,
+        role: 'caregiver',
+      });
       onClose();
+      // Optionally redirect or show success state
+      // router.push('/dashboard'); 
+    } catch (err: any) {
+      setApiError(err.message || 'Erro ao criar conta de cuidador');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -226,9 +252,30 @@ const BecomeCaregiverModal = ({
                 <p className="text-gray-400 mt-2 text-sm">
                   Preencha os dados essenciais
                 </p>
+                {apiError && (
+                  <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm font-medium">
+                    {apiError}
+                  </div>
+                )}
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5 pb-4">
+                {/* Name */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300 ml-1">Nome completo</label>
+                  <div className="relative group">
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      className={`w-full bg-black/40 border ${errors.name && touched.name ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-[#FF6B35]/50'} text-white rounded-xl py-3 px-4 outline-none transition-all placeholder:text-gray-600`}
+                      placeholder="Seu nome completo"
+                    />
+                  </div>
+                  {errors.name && touched.name && <p className="text-red-400 text-xs ml-1 font-medium">{errors.name}</p>}
+                </div>
+
                 {/* Email */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-1.5">
@@ -388,9 +435,10 @@ const BecomeCaregiverModal = ({
 
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white bg-[#FF6B35] hover:bg-[#E55A2B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF6B35] transition-all active:scale-[0.98] mb-2"
+                  disabled={isLoading}
+                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white bg-[#FF6B35] hover:bg-[#E55A2B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF6B35] transition-all active:scale-[0.98] mb-2 disabled:opacity-70"
                 >
-                  Criar conta
+                  {isLoading ? 'Criando conta...' : 'Criar conta'}
                 </button>
               </form>
             </div>

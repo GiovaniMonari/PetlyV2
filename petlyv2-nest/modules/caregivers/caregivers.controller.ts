@@ -17,14 +17,26 @@ export class CaregiversController {
     return this.caregiversService.create(createCaregiverDto);
   }
 
+  /**
+   * GET /api/caregivers
+   * Supports filtering by type, location, maxPrice, and sorting
+   * Used by the /cuidadores page on the frontend
+   */
   @Get()
   findAll(
     @Query('type') type?: CaregiverType,
+    @Query('location') location?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('sortBy') sortBy?: string,
     @Query('specialty') specialty?: string,
   ) {
-    if (type) return this.caregiversService.findByType(type);
-    if (specialty) return this.caregiversService.findBySpecialty(specialty);
-    return this.caregiversService.findAll();
+    return this.caregiversService.findFiltered({
+      type,
+      location,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      sortBy,
+      specialty,
+    });
   }
 
   @Get(':id')

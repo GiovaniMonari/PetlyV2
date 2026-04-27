@@ -5,8 +5,8 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CaregiverCard from '@/components/CaregiverCard';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
-import { caregivers } from '@/data/caregivers';
-import { useSearchParams } from 'next/navigation';
+import { apiGetCaregivers, getUser } from '@/utils/api';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Search,
   SlidersHorizontal,
@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Rat,
 } from 'lucide-react';
+import router from 'next/router';
 
 const PET_TYPES = [
   { id: 'all', label: 'Todos', icon: MoreHorizontal },
@@ -53,26 +54,40 @@ function CuidadoresPageContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const filtered = useMemo(() => {
-    const normalizeLoc = (loc: string) => 
-      loc.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const [dbCaregivers, setDbCaregivers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-    let list = caregivers.filter((c) => {
-      const matchesType = selectedType === 'all' || c.type === selectedType;
-      
-      const normCLoc = normalizeLoc(c.location);
-      const normFilter = normalizeLoc(locationFilter);
-      const matchesLocation = !normFilter || normCLoc.includes(normFilter) || normFilter.includes(normCLoc);
+  // Redirect caregivers to profile
+  useEffect(() => {
+    const user = getUser();
+    if (user && user.role === 'caregiver') {
+      router.push('/dashboard');
+    }
+  }, [router]);
 
-      const matchesPrice = c.price <= priceMax;
-      return matchesType && matchesLocation && matchesPrice;
-    });
-
-    if (sortBy === 'price_asc') list = [...list].sort((a, b) => a.price - b.price);
-    else if (sortBy === 'price_desc') list = [...list].sort((a, b) => b.price - a.price);
-    else if (sortBy === 'rating') list = [...list].sort((a, b) => b.rating - a.rating);
-
-    return list;
+  // Fetch from backend whenever filters change
+  useEffect(() => {
+    let active = true;
+    const fetchCaregivers = async () => {
+      setIsLoading(true);
+      try {
+        const data = await apiGetCaregivers({
+          type: selectedType,
+          location: locationFilter,
+          maxPrice: priceMax,
+          sortBy,
+        });
+        if (active) {
+          setDbCaregivers(data || []);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar cuidadores:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    fetchCaregivers();
+    return () => { active = false; };
   }, [selectedType, locationFilter, sortBy, priceMax]);
 
   const hasActiveFilters =
@@ -103,7 +118,7 @@ function CuidadoresPageContent() {
                 Encontre seu cuidador
               </h1>
               <p className="text-lg text-gray-400">
-                {filtered.length} profissional{filtered.length !== 1 ? 'ais' : ''} disponível{filtered.length !== 1 ? 'eis' : ''}
+                {isLoading ? 'Buscando cuidadores...' : `${dbCaregivers.length} profissional${dbCaregivers.length !== 1 ? 'ais' : ''} disponível${dbCaregivers.length !== 1 ? 'eis' : ''}`}
               </p>
             </div>
 
@@ -225,11 +240,15 @@ function CuidadoresPageContent() {
 
         {/* Cards grid */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          {filtered.length > 0 ? (
+          {isLoading ? (
+            <div className="py-20 flex justify-center">
+              <div className="w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : dbCaregivers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map((caregiver) => (
-                <div key={caregiver.id}>
-                  <CaregiverCard caregiver={caregiver} />
+              {dbCaregivers.map((caregiver) => (
+                <div key={caregiver._id || caregiver.id}>
+                  <CaregiverCard caregiver={{...caregiver, id: caregiver._id || caregiver.id}} />
                 </div>
               ))}
             </div>

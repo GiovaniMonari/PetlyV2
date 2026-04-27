@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsEmail, IsArray, IsEnum, IsOptional, MinLength, IsNumber } from 'class-validator';
 
 export enum CaregiverType {
   DOG = 'dog',
@@ -15,15 +15,29 @@ export class CreateCaregiverDto {
   email!: string;
 
   @IsString()
+  @MinLength(6)
   password!: string;
+
+  @IsOptional()
+  @IsString()
+  cpf?: string;
 
   @IsString()
   location!: string;
 
+  @IsOptional()
   @IsString()
-  bio!: string;
+  bio?: string;
 
+  @IsOptional()
   @IsArray()
-  @IsEnum(CaregiverType, { each: true })
-  types!: CaregiverType[];
+  @IsString({ each: true })
+  specialties?: string[];
+
+  @IsEnum(CaregiverType)
+  type!: CaregiverType;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
 }

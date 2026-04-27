@@ -22,6 +22,9 @@ export class Caregiver {
   @Prop({ required: true })
   password!: string;
 
+  @Prop({ unique: true, sparse: true })
+  cpf?: string;
+
   @Prop({ required: true })
   location!: string;
 
@@ -31,11 +34,26 @@ export class Caregiver {
   @Prop()
   bio!: string;
 
+  @Prop()
+  avatar?: string;
+
   @Prop({ enum: CaregiverType, required: true })
   type!: CaregiverType;
 
+  @Prop({ default: 0 })
+  price!: number;
+
+  @Prop({ default: 0 })
+  rating!: number;
+
+  @Prop({ default: 0 })
+  reviewsCount!: number;
+
   @Prop({ type: [ServiceSchema], default: [] })
   services!: Service[];
+
+  @Prop({ default: true })
+  isActive!: boolean;
 }
 
 export const CaregiverSchema = SchemaFactory.createForClass(Caregiver);

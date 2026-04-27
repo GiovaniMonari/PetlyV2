@@ -1,33 +1,54 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import FilterBar from '@/components/FilterBar';
 import CaregiverCard from '@/components/CaregiverCard';
 import Footer from '@/components/Footer';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
-import { caregivers } from '@/data/caregivers';
+import { apiGetCaregivers, getUser } from '@/utils/api';
 import FilterCards from '@/components/FilterBar';
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
+  const router = useRouter();
   const [selectedType, setSelectedType] = useState('all');
   const [locationFilter, setLocationFilter] = useState('');
   const [isBecomeCaregiverModalOpen, setIsBecomeCaregiverModalOpen] = useState(false);
 
-  const filteredCaregivers = useMemo(() => {
-    const normalizeLoc = (loc: string) => 
-      loc.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const [dbCaregivers, setDbCaregivers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-    return caregivers.filter(caregiver => {
-      const matchesType = selectedType === 'all' || caregiver.type === selectedType;
-      
-      const normCLoc = normalizeLoc(caregiver.location);
-      const normFilter = normalizeLoc(locationFilter);
-      const matchesLocation = !normFilter || normCLoc.includes(normFilter) || normFilter.includes(normCLoc);
+  // Redirect caregivers to profile
+  useEffect(() => {
+    const user = getUser();
+    if (user && user.role === 'caregiver') {
+      router.push('/dashboard');
+    }
+  }, [router]);
 
-      return matchesType && matchesLocation;
-    });
+  // Fetch from backend whenever filters change
+  useEffect(() => {
+    let active = true;
+    const fetchCaregivers = async () => {
+      setIsLoading(true);
+      try {
+        const data = await apiGetCaregivers({
+          type: selectedType,
+          location: locationFilter,
+        });
+        if (active) {
+          setDbCaregivers(data || []);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar cuidadores:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    fetchCaregivers();
+    return () => { active = false; };
   }, [selectedType, locationFilter]);
 
   return (
@@ -75,14 +96,20 @@ export default function HomePage() {
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-2">
                   Cuidadores disponíveis
                 </h2>
-                <p className="text-lg text-gray-400 font-medium">{filteredCaregivers.length} profissional{filteredCaregivers.length !== 1 ? 'ais' : ''} encontrado{filteredCaregivers.length !== 1 ? 's' : ''}</p>
+                <p className="text-lg text-gray-400 font-medium">
+                  {isLoading ? 'Buscando cuidadores...' : `${dbCaregivers.length} profissional${dbCaregivers.length !== 1 ? 'ais' : ''} encontrado${dbCaregivers.length !== 1 ? 's' : ''}`}
+                </p>
               </div>
 
-              {filteredCaregivers.length > 0 ? (
+              {isLoading ? (
+                <div className="py-20 flex justify-center">
+                  <div className="w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : dbCaregivers.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredCaregivers.map((caregiver) => (
-                    <div key={caregiver.id}>
-                      <CaregiverCard caregiver={caregiver} />
+                  {dbCaregivers.map((caregiver) => (
+                    <div key={caregiver._id || caregiver.id}>
+                      <CaregiverCard caregiver={{...caregiver, id: caregiver._id || caregiver.id}} />
                     </div>
                   ))}
                 </div>
