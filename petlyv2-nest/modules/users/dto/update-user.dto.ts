@@ -12,7 +12,13 @@ import {
 } from 'class-validator';
 import { CreateUserDto } from './create-user.dto';
 
+import { ServiceType } from '../../caregivers/dto/service-dto';
+
 class ServiceItemDto {
+  @IsOptional()
+  @IsString()
+  type?: string;
+
   @IsString()
   name!: string;
 

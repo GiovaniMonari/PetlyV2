@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
+import { ServiceType } from '../../caregivers/dto/service-dto';
 
 export type UserDocument = User & Document;
 
@@ -44,8 +45,13 @@ export class User {
   @Prop({ default: 0 })
   price?: number;
 
-  @Prop({ type: [{ name: String, price: Number, duration: String }], default: [] })
-  services?: { name: string; price: number; duration: string }[];
+  @Prop({ type: [{ 
+    type: { type: String, enum: Object.values(ServiceType) },
+    name: String, 
+    price: Number, 
+    duration: String 
+  }], default: [] })
+  services?: { type: ServiceType; name: string; price: number; duration: string }[];
 
   @Prop({ type: [Number], default: [0, 1, 2, 3, 4, 5, 6] }) // 0 = Sunday, 1 = Monday, etc.
   availableDays?: number[];

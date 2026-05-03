@@ -13,17 +13,14 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { apiGetProfile, apiUpdateProfile, isAuthenticated, setUser as setLocalUser } from '@/utils/api';
-
-const AVAILABLE_SERVICES = [
-  'Hospedagem', 
-  'Visita em domicílio', 
-  'Passeio',
-  'Banho',
-  'Tosa',
-  'Dog Walking',
-  'Cat Sitting'
-];
+import {
+  apiGetCaregiverServiceTypes,
+  apiGetProfile,
+  apiUpdateProfile,
+  CaregiverServiceTypeOption,
+  isAuthenticated,
+  setUser as setLocalUser,
+} from '@/utils/api';
 
 const DAYS_OF_WEEK = [
   { id: 0, label: 'Domingo' },
@@ -38,10 +35,11 @@ const DAYS_OF_WEEK = [
 export default function ServicosPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
+  const [serviceOptions, setServiceOptions] = useState<CaregiverServiceTypeOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  
+
   const [editForm, setEditForm] = useState<any>({
     bio: '',
     services: [],
@@ -56,17 +54,36 @@ export default function ServicosPage() {
 
     const fetchData = async () => {
       try {
-        const profileData = await apiGetProfile();
-        
+        const [profileData, caregiverServiceTypes] = await Promise.all([
+          apiGetProfile(),
+          apiGetCaregiverServiceTypes(),
+        ]);
+
         if (profileData.role !== 'caregiver') {
           router.push('/');
           return;
         }
 
+        setServiceOptions(caregiverServiceTypes || []);
+
+        const allowedServiceNames = new Set(
+          (caregiverServiceTypes || []).map((service) => service.name),
+        );
+        const filteredServices = (profileData.services || [])
+          .filter((service: any) => allowedServiceNames.has(service?.name))
+          .map((service: any) => {
+            const opt = caregiverServiceTypes?.find((o: any) => o.name === service.name || o.type === service.type);
+            return {
+              ...service,
+              type: service.type || opt?.type,
+              duration: service.duration || (opt?.durations?.[0] || '60 min')
+            };
+          });
+
         setProfile(profileData);
         setEditForm({
           bio: profileData.bio || '',
-          services: profileData.services || [],
+          services: filteredServices,
           availableDays: profileData.availableDays || [0, 1, 2, 3, 4, 5, 6]
         });
       } catch (error) {
@@ -79,36 +96,47 @@ export default function ServicosPage() {
     fetchData();
   }, [router]);
 
-  const handleServiceChange = (serviceName: string, isChecked: boolean) => {
-    if (isChecked) {
-      setEditForm({
-        ...editForm,
-        services: [...editForm.services, { name: serviceName, price: 0, duration: '60 min' }]
-      });
-    } else {
-      setEditForm({
-        ...editForm,
-        services: editForm.services.filter((s: any) => s.name !== serviceName)
-      });
-    }
-  };
+  const handleServiceChange = (serviceOption: CaregiverServiceTypeOption, isChecked: boolean) => {
+    setEditForm((prev: any) => {
+      if (isChecked) {
+        const defaultDuration = serviceOption.durations && serviceOption.durations.length > 0
+          ? serviceOption.durations[0]
+          : '60 min';
 
-  const handleServicePriceChange = (serviceName: string, price: number) => {
-    setEditForm({
-      ...editForm,
-      services: editForm.services.map((s: any) => 
-        s.name === serviceName ? { ...s, price } : s
-      )
+        return {
+          ...prev,
+          services: [...prev.services, {
+            type: serviceOption.type,
+            name: serviceOption.name,
+            price: 0,
+            duration: defaultDuration
+          }]
+        };
+      } else {
+        return {
+          ...prev,
+          services: prev.services.filter((s: any) => s.type !== serviceOption.type && s.name !== serviceOption.name)
+        };
+      }
     });
   };
 
-  const handleServiceDurationChange = (serviceName: string, duration: string) => {
-    setEditForm({
-      ...editForm,
-      services: editForm.services.map((s: any) => 
-        s.name === serviceName ? { ...s, duration } : s
+  const handleServicePriceChange = (serviceType: string, price: number) => {
+    setEditForm((prev: any) => ({
+      ...prev,
+      services: prev.services.map((s: any) =>
+        (s.type === serviceType || s.name === serviceType) ? { ...s, price } : s
       )
-    });
+    }));
+  };
+
+  const handleServiceDurationChange = (serviceType: string, duration: string) => {
+    setEditForm((prev: any) => ({
+      ...prev,
+      services: prev.services.map((s: any) =>
+        (s.type === serviceType || s.name === serviceType) ? { ...s, duration } : s
+      )
+    }));
   };
 
   const handleDayChange = (dayId: number) => {
@@ -130,17 +158,40 @@ export default function ServicosPage() {
     setIsSaving(true);
     setSuccessMsg('');
     try {
+      const allowedServiceNames = new Set(
+        serviceOptions.map((service) => service.name),
+      );
+      const allowedServiceTypes = new Set(
+        serviceOptions.map((service) => service.type),
+      );
+      const validServices = (editForm.services || []).filter((service: any) =>
+        allowedServiceTypes.has(service?.type as any) || allowedServiceNames.has(service?.name)
+      ).map((s: any) => {
+        const newService = { ...s };
+        if (!newService.type) {
+          const opt = serviceOptions.find(o => o.name === s.name);
+          if (opt) newService.type = opt.type;
+        }
+        return newService;
+      });
+
       const payload = {
         bio: editForm.bio,
-        services: editForm.services,
+        services: validServices,
         availableDays: editForm.availableDays
       };
 
       const updated = await apiUpdateProfile(profile._id, payload);
       setProfile(updated);
       setLocalUser(updated);
-      setSuccessMsg('Configurações salvas com sucesso!');
       
+      // Update local state with latest data from backend
+      setEditForm((prev: any) => ({
+        ...prev,
+        services: updated.services || []
+      }));
+
+      setSuccessMsg('Configurações salvas com sucesso!');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
       console.error('Error updating profile:', err);
@@ -207,7 +258,7 @@ export default function ServicosPage() {
                 <h1 className="text-2xl font-bold text-white mb-1">Serviços e Preços</h1>
                 <p className="text-gray-400 text-sm">Configure o que você oferece e quanto cobra.</p>
               </div>
-              <button 
+              <button
                 onClick={handleSave}
                 disabled={isSaving}
                 className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
@@ -231,16 +282,16 @@ export default function ServicosPage() {
             )}
 
             <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 space-y-8">
-              
+
               {/* Bio Section */}
               <div className="space-y-3">
                 <label className="text-sm font-bold text-white flex items-center gap-2">
                   Resumo Profissional (Mini Biografia)
                 </label>
                 <p className="text-sm text-gray-400">Conte aos tutores um pouco sobre sua experiência e amor por pets.</p>
-                <textarea 
+                <textarea
                   value={editForm.bio}
-                  onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
+                  onChange={(e) => setEditForm((prev: any) => ({ ...prev, bio: e.target.value }))}
                   placeholder="Olá! Sou apaixonado por animais e tenho 5 anos de experiência..."
                   className="w-full bg-black/40 border border-white/10 text-white rounded-xl p-4 min-h-[120px] outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 transition-all resize-y"
                 />
@@ -254,44 +305,48 @@ export default function ServicosPage() {
                   Serviços Oferecidos
                 </label>
                 <div className="grid gap-3">
-                  {AVAILABLE_SERVICES.map(service => {
-                    const isSelected = editForm.services?.some((s: any) => s.name === service);
-                    const serviceData = editForm.services?.find((s: any) => s.name === service);
+                  {serviceOptions.map((serviceOption) => {
+                    const isSelected = editForm.services?.some((s: any) => s.type === serviceOption.type || s.name === serviceOption.name);
+                    const serviceData = editForm.services?.find((s: any) => s.type === serviceOption.type || s.name === serviceOption.name);
                     return (
-                      <div key={service} className="flex flex-col sm:flex-row sm:items-center gap-4 bg-black/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                      <div key={serviceOption.type} className="flex flex-col sm:flex-row sm:items-center gap-4 bg-black/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                         <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={isSelected}
-                            onChange={(e) => handleServiceChange(service, e.target.checked)}
+                            onChange={(e) => handleServiceChange(serviceOption, e.target.checked)}
                             className="w-5 h-5 rounded border-white/10 text-[#FF6B35] focus:ring-[#FF6B35] bg-black"
                           />
-                          <span className="text-white font-medium">{service}</span>
+                          <div>
+                            <span className="text-white font-medium">{serviceOption.name}</span>
+                            <p className="text-xs text-gray-400 mt-1">{serviceOption.description}</p>
+                          </div>
                         </label>
-                        
+
                         {isSelected && (
                           <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 ml-8 sm:ml-0">
                             <div className="flex items-center gap-2">
                               <span className="text-gray-400 text-sm font-bold">R$</span>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 value={serviceData?.price || 0}
-                                onChange={(e) => handleServicePriceChange(service, Number(e.target.value))}
+                                onChange={(e) => handleServicePriceChange(serviceOption.type, Number(e.target.value))}
                                 className="w-24 bg-black/50 border border-white/10 focus:border-[#FF6B35]/50 text-white rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#FF6B35]/50"
                               />
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-gray-400 text-xs uppercase font-bold tracking-wider hidden sm:inline">por</span>
                               <select
-                                value={serviceData?.duration || '60 min'}
-                                onChange={(e) => handleServiceDurationChange(service, e.target.value)}
+                                value={serviceData?.duration || ''}
+                                onChange={(e) => handleServiceDurationChange(serviceOption.type, e.target.value)}
                                 className="bg-black/50 border border-white/10 focus:border-[#FF6B35]/50 text-white rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#FF6B35]/50 text-sm"
                               >
-                                <option value="30 min">30 min</option>
-                                <option value="60 min">60 min</option>
-                                <option value="Diária">Diária (24h)</option>
-                                <option value="Por visita">Por visita</option>
-                                <option value="Por banho">Por banho</option>
+                                {serviceOption.durations?.map((dur) => (
+                                  <option key={dur} value={dur}>{dur}</option>
+                                ))}
+                                {(!serviceOption.durations || serviceOption.durations.length === 0) && (
+                                  <option value="60 min">60 min</option>
+                                )}
                               </select>
                             </div>
                           </div>
@@ -316,11 +371,10 @@ export default function ServicosPage() {
                       <button
                         key={day.id}
                         onClick={() => handleDayChange(day.id)}
-                        className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                          isSelected 
-                            ? 'bg-[#06A77D]/10 text-[#06A77D] border-[#06A77D]/30 shadow-sm' 
+                        className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${isSelected
+                            ? 'bg-[#06A77D]/10 text-[#06A77D] border-[#06A77D]/30 shadow-sm'
                             : 'bg-black/30 text-gray-400 border-white/5 hover:border-white/20'
-                        }`}
+                          }`}
                       >
                         {day.label}
                       </button>

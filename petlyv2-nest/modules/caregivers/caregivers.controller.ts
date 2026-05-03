@@ -5,7 +5,7 @@ import {
 import { CaregiversService } from './caregivers.service';
 import { CreateCaregiverDto, CaregiverType } from './dto/create-caregiver.dto';
 import { UpdateCaregiverDto } from './dto/update-caregiver.dto';
-import { ServiceDto } from './dto/service-dto';
+import { ServiceDto, SERVICE_DEFAULTS, ServiceType } from './dto/service-dto';
 import { UpdateServiceDto } from './dto/update-services.dto';
 
 @Controller('caregivers')
@@ -36,6 +36,21 @@ export class CaregiversController {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       sortBy,
       specialty,
+    });
+  }
+
+  @Get('service-types')
+  getServiceTypes() {
+    return (Object.values(ServiceType) as ServiceType[]).map((type) => {
+      const defaultValue = SERVICE_DEFAULTS[type];
+      return {
+        type,
+        name: defaultValue.name,
+        description: defaultValue.description,
+        durations: Array.isArray(defaultValue.duration)
+          ? defaultValue.duration
+          : [defaultValue.duration],
+      };
     });
   }
 

@@ -83,6 +83,10 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface ForgetPasswordPayload {
+  email: string;
+}
+
 export interface RegisterTutorPayload {
   name: string;
   email: string;
@@ -110,6 +114,10 @@ export interface AuthResponse {
   message?: string;
 }
 
+export interface ForgetPasswordResponse {
+  message: string;
+}
+
 export async function apiLogin(payload: LoginPayload): Promise<AuthResponse> {
   const data = await request<AuthResponse>('/auth/login', {
     method: 'POST',
@@ -130,6 +138,15 @@ export async function apiRegister(
   setToken(data.access_token);
   setUser(data.user);
   return data;
+}
+
+export async function apiForgetPassword(
+  payload: ForgetPasswordPayload,
+): Promise<ForgetPasswordResponse> {
+  return request<ForgetPasswordResponse>('/auth/forget-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 // ============================================================
@@ -165,6 +182,25 @@ export async function apiGetCaregivers(filters?: {
 
 export async function apiGetCaregiver(id: string): Promise<any> {
   return request(`/users/${id}`);
+}
+
+export enum ServiceType {
+  WALK = 'walk',
+  BOARDING = 'boarding',
+  DAYCARE = 'daycare',
+  GROOMING = 'grooming',
+  TRAINING = 'training',
+}
+
+export interface CaregiverServiceTypeOption {
+  type: ServiceType;
+  name: string;
+  description: string;
+  durations: string[];
+}
+
+export async function apiGetCaregiverServiceTypes(): Promise<CaregiverServiceTypeOption[]> {
+  return request('/caregivers/service-types');
 }
 
 // ============================================================

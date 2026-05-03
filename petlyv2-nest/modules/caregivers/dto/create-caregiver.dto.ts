@@ -18,26 +18,12 @@ export class CreateCaregiverDto {
   @MinLength(6)
   password!: string;
 
-  @IsOptional()
   @IsString()
-  cpf?: string;
+  cpf!: string;
 
   @IsString()
   location!: string;
 
-  @IsOptional()
-  @IsString()
-  bio?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  specialties?: string[];
-
   @IsEnum(CaregiverType)
   type!: CaregiverType;
-
-  @IsOptional()
-  @IsNumber()
-  price?: number;
 }
