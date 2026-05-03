@@ -18,6 +18,14 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
 
   useEffect(() => {
     setUser(getUser());
+    
+    // Listen for storage events to update user info (e.g. avatar change)
+    const handleStorageChange = () => {
+      setUser(getUser());
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [pathname]);
 
   const handleLogout = () => {
@@ -55,8 +63,14 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
             {user ? (
               <div className="flex items-center gap-4">
                 <Link href="/perfil" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 px-3 py-1.5 rounded-lg transition-colors">
-                  <User className="w-4 h-4" />
-                  <span>Olá, {user.name}</span>
+                  <div className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
+                    {user.avatar ? (
+                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                  <span>Olá, {user.name.split(' ')[0]}</span>
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -101,7 +115,13 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
             {user ? (
               <div className="flex flex-col gap-2 mt-2 pt-4 border-t border-white/10">
                 <Link href="/perfil" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 text-sm text-gray-300 px-4 py-2 hover:bg-white/5 rounded-lg transition-colors">
-                  <User className="w-4 h-4" />
+                  <div className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border border-white/10">
+                    {user.avatar ? (
+                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-3.5 h-3.5" />
+                    )}
+                  </div>
                   <span>Olá, {user.name}</span>
                 </Link>
                 <button

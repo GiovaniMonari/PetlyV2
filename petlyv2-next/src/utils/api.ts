@@ -51,9 +51,13 @@ async function request<T = any>(
   const token = getToken();
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type if not sending FormData (browser sets it automatically with boundary)
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -72,6 +76,16 @@ async function request<T = any>(
   }
 
   return data as T;
+}
+
+export async function apiUploadAvatar(file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return request('/users/avatar', {
+    method: 'POST',
+    body: formData,
+  });
 }
 
 // ============================================================

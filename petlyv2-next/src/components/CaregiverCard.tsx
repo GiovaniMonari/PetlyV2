@@ -68,8 +68,15 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
         {/* Price and Button */}
         <div className="flex items-center justify-between pt-4 border-t border-white/10">
           <div>
-            <p className="text-base font-bold text-white">R$ {caregiver.price}</p>
-            <p className="text-xs text-gray-400 font-medium">/dia</p>
+            <p className="text-xs text-gray-400 font-medium">A partir de</p>
+            <p className="text-base font-bold text-white">
+              R$ {(
+                Number(caregiver.minPrice) || 
+                Number(caregiver.price) || 
+                Number(caregiver.services?.[0]?.price) || 
+                0
+              ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
           </div>
           <button
             onClick={(event) => {

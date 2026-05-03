@@ -45,6 +45,12 @@ export class User {
   @Prop({ default: 0 })
   price?: number;
 
+  @Prop({ default: 0 })
+  minPrice?: number;
+
+  @Prop({ default: 0 })
+  maxPrice?: number;
+
   @Prop({ type: [{ 
     type: { type: String, enum: Object.values(ServiceType) },
     name: String, 

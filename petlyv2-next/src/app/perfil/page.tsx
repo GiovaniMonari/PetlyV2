@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import ProfilePhotoUpload from '@/components/ProfilePhotoUpload';
 import { apiGetProfile, apiGetMyBookings, isAuthenticated, logout, apiUpdateProfile, setUser as setLocalUser } from '@/utils/api';
 
 export default function PerfilPage() {
@@ -202,14 +203,18 @@ export default function PerfilPage() {
           
           <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
             {/* Avatar */}
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-[#0a0a0a] shadow-xl overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0 relative">
-              {profile.avatar ? (
-                <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-5xl font-bold text-gray-500 uppercase">{profile.name.charAt(0)}</span>
-              )}
+            <div className="flex-shrink-0">
+              <ProfilePhotoUpload 
+                currentAvatar={profile.avatar} 
+                userName={profile.name} 
+                onUploadSuccess={(newAvatarUrl) => {
+                  const updatedProfile = { ...profile, avatar: newAvatarUrl };
+                  setProfile(updatedProfile);
+                  setLocalUser(updatedProfile);
+                }}
+              />
               {profile.role === 'caregiver' && (
-                <div className="absolute bottom-2 right-2 w-6 h-6 bg-[#06A77D] rounded-full border-2 border-gray-900 flex items-center justify-center" title="Cuidador Verificado">
+                <div className="absolute bottom-2 right-2 w-6 h-6 bg-[#06A77D] rounded-full border-2 border-gray-900 flex items-center justify-center z-20" title="Cuidador Verificado">
                   <Shield className="w-3 h-3 text-white" />
                 </div>
               )}

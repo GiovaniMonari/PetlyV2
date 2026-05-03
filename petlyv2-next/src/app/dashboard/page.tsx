@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import ProfilePhotoUpload from '@/components/ProfilePhotoUpload';
 import { apiGetProfile, apiGetMyBookings, isAuthenticated, logout } from '@/utils/api';
 
 export default function DashboardPage() {
@@ -107,12 +108,19 @@ export default function DashboardPage() {
           <div className="md:w-64 flex-shrink-0 space-y-4">
             <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
               <div className="flex items-center gap-4 mb-6 pb-6 border-b border-white/10">
-                <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden">
-                  {profile.avatar ? (
-                    <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xl font-bold text-gray-500 uppercase">{profile.name.charAt(0)}</span>
-                  )}
+                <div className="scale-75 origin-left">
+                  <ProfilePhotoUpload 
+                    currentAvatar={profile.avatar} 
+                    userName={profile.name} 
+                    onUploadSuccess={(newAvatarUrl) => {
+                      const updatedProfile = { ...profile, avatar: newAvatarUrl };
+                      setProfile(updatedProfile);
+                      // Update user in local storage to sync across tabs/navbar
+                      localStorage.setItem('petly_user', JSON.stringify(updatedProfile));
+                      // Force a refresh of the Navbar if needed, though most apps use a provider
+                      window.dispatchEvent(new Event('storage'));
+                    }}
+                  />
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-sm line-clamp-1">{profile.name}</h3>

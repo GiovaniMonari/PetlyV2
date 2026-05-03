@@ -5,12 +5,14 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
@@ -89,11 +91,35 @@ export class UsersService {
         sortOption = { createdAt: -1 };
     }
 
-    return this.userModel
+    const caregivers = await this.userModel
       .find(query)
       .select('-password -cpf')
       .sort(sortOption)
       .exec();
+
+    return caregivers.map((c) => {
+      const obj = c.toObject() as any;
+      
+      // Get all prices from services, filtering out invalid ones
+      const prices = (obj.services || [])
+        .map((s: any) => Number(s.price))
+        .filter((p: number) => !isNaN(p));
+
+      if (prices.length > 0) {
+        obj.minPrice = Math.min(...prices);
+        obj.maxPrice = Math.max(...prices);
+        // Update the main price field to reflect the minimum price for sorting/display
+        obj.price = obj.minPrice;
+      } else {
+        // Fallback for cases where services have no valid prices or no services exist
+        const basePrice = Number(obj.price) || 0;
+        obj.minPrice = basePrice;
+        obj.maxPrice = basePrice;
+        obj.price = basePrice;
+      }
+
+      return obj;
+    }) as any;
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<UserDocument> {
@@ -104,6 +130,20 @@ export class UsersService {
     if (updateUserDto.password) {
       const salt = await bcrypt.genSalt(10);
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
+    }
+
+    // If services are updated, calculate the min and max prices
+    if (updateUserDto.services && updateUserDto.services.length > 0) {
+      const prices = updateUserDto.services.map(s => s.price);
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      (updateUserDto as any).price = minPrice;
+      (updateUserDto as any).minPrice = minPrice;
+      (updateUserDto as any).maxPrice = maxPrice;
+    } else if (updateUserDto.services && updateUserDto.services.length === 0) {
+      (updateUserDto as any).price = 0;
+      (updateUserDto as any).minPrice = 0;
+      (updateUserDto as any).maxPrice = 0;
     }
 
     const user = await this.userModel
@@ -154,5 +194,14 @@ export class UsersService {
     if (!result) {
       throw new NotFoundException('Usuário não encontrado');
     }
+  }
+
+  async uploadAvatar(userId: string, file: Express.Multer.File): Promise<UserDocument> {
+    const user = await this.findById(userId);
+    
+    const result = await this.cloudinaryService.uploadFile(file);
+    
+    user.avatar = result.secure_url;
+    return user.save();
   }
 }
