@@ -42,6 +42,7 @@ type CaregiverProfile = {
   bio?: string;
   specialties?: string[];
   petTypes?: string[];
+  petsQuantity?: { type: string; quantity: number }[];
   availableDays?: number[];
   services?: CaregiverService[];
   price?: number;
@@ -94,6 +95,7 @@ export default function CaregiverDetailPage() {
   const [selectedService, setSelectedService] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedPetType, setSelectedPetType] = useState('dog');
   const [petsCount, setPetsCount] = useState(1);
   const [notes, setNotes] = useState('');
   const [isBooking, setIsBooking] = useState(false);
@@ -212,6 +214,12 @@ export default function CaregiverDetailPage() {
     }
   }, [reviewableBookings, selectedBookingId]);
 
+  useEffect(() => {
+    if (caregiver?.petsQuantity && caregiver.petsQuantity.length > 0) {
+      setSelectedPetType(caregiver.petsQuantity[0].type);
+    }
+  }, [caregiver]);
+
   const fetchMyBookings = async () => {
     if (!isAuthenticated()) {
       setMyBookings([]);
@@ -313,6 +321,7 @@ export default function CaregiverDetailPage() {
         endDate,
         serviceType: selectedServiceData.name,
         petsCount,
+        petType: selectedPetType,
         notes: notes.trim() || undefined,
       });
 
@@ -500,7 +509,7 @@ export default function CaregiverDetailPage() {
               Escolha o serviço que o cuidador oferece e monte a reserva com base nesses dados.
             </p>
 
-            <div className="grid sm:grid-cols-2 gap-4 mb-5">
+            <div className="grid sm:grid-cols-3 gap-4 mb-5">
               <div>
                 <label className="block text-sm font-semibold text-white mb-2">Serviço</label>
                 <select
@@ -510,20 +519,51 @@ export default function CaregiverDetailPage() {
                 >
                   {services.map((service) => (
                     <option key={service.name} value={service.name} className="bg-[#111]">
-                      {service.name} - {formatCurrency(service.price)} ({service.duration})
+                      {service.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">Quantidade de pets</label>
+                <label className="block text-sm font-semibold text-white mb-2">Tipo de pet</label>
+                <select
+                  value={selectedPetType}
+                  onChange={(event) => {
+                    setSelectedPetType(event.target.value);
+                    setPetsCount(1);
+                  }}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
+                >
+                  {caregiver.petsQuantity && caregiver.petsQuantity.length > 0 ? (
+                    caregiver.petsQuantity.map((p) => (
+                      <option key={p.type} value={p.type} className="bg-[#111]">
+                        {PET_TYPE_LABELS[p.type] || p.type}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" className="bg-[#111]">Nenhum pet aceito</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-white mb-2">
+                  Quantidade
+                  <span className="ml-1 text-[10px] text-gray-500 font-normal">
+                    (Max: {caregiver.petsQuantity?.find(p => p.type === selectedPetType)?.quantity || 1})
+                  </span>
+                </label>
                 <input
                   type="number"
                   min={1}
-                  max={10}
+                  max={caregiver.petsQuantity?.find(p => p.type === selectedPetType)?.quantity || 1}
                   value={petsCount}
-                  onChange={(event) => setPetsCount(Math.max(1, Number(event.target.value) || 1))}
+                  onChange={(event) => {
+                    const max = caregiver.petsQuantity?.find(p => p.type === selectedPetType)?.quantity || 1;
+                    const val = Math.min(max, Math.max(1, Number(event.target.value) || 1));
+                    setPetsCount(val);
+                  }}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
                 />
               </div>

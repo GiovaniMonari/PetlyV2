@@ -15,6 +15,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import {
   apiGetCaregiverServiceTypes,
+  apiGetCaregiverPetTypes,
   apiGetProfile,
   apiUpdateProfile,
   CaregiverServiceTypeOption,
@@ -36,6 +37,7 @@ export default function ServicosPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [serviceOptions, setServiceOptions] = useState<CaregiverServiceTypeOption[]>([]);
+  const [petTypeOptions, setPetTypeOptions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -43,7 +45,8 @@ export default function ServicosPage() {
   const [editForm, setEditForm] = useState<any>({
     bio: '',
     services: [],
-    availableDays: [0, 1, 2, 3, 4, 5, 6]
+    availableDays: [0, 1, 2, 3, 4, 5, 6],
+    petQuantities: []
   });
 
   useEffect(() => {
@@ -54,9 +57,10 @@ export default function ServicosPage() {
 
     const fetchData = async () => {
       try {
-        const [profileData, caregiverServiceTypes] = await Promise.all([
+        const [profileData, caregiverServiceTypes, caregiverPetTypes] = await Promise.all([
           apiGetProfile(),
           apiGetCaregiverServiceTypes(),
+          apiGetCaregiverPetTypes(),
         ]);
 
         if (profileData.role !== 'caregiver') {
@@ -65,6 +69,7 @@ export default function ServicosPage() {
         }
 
         setServiceOptions(caregiverServiceTypes || []);
+        setPetTypeOptions((caregiverPetTypes as any) || []);
 
         const allowedServiceNames = new Set(
           (caregiverServiceTypes || []).map((service) => service.name),
@@ -84,7 +89,8 @@ export default function ServicosPage() {
         setEditForm({
           bio: profileData.bio || '',
           services: filteredServices,
-          availableDays: profileData.availableDays || [0, 1, 2, 3, 4, 5, 6]
+          availableDays: profileData.availableDays || [0, 1, 2, 3, 4, 5, 6],
+          petQuantities: profileData.petsQuantity || []
         });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -154,6 +160,31 @@ export default function ServicosPage() {
     }
   };
 
+  const handlePetTypeChange = (petType: string, isChecked: boolean) => {
+    setEditForm((prev: any) => {
+      if (isChecked) {
+        return {
+          ...prev,
+          petQuantities: [...prev.petQuantities, { type: petType, quantity: 1 }]
+        };
+      } else {
+        return {
+          ...prev,
+          petQuantities: prev.petQuantities.filter((p: any) => p.type !== petType)
+        };
+      }
+    });
+  };
+
+  const handlePetQuantityChange = (petType: string, quantity: number) => {
+    setEditForm((prev: any) => ({
+      ...prev,
+      petQuantities: prev.petQuantities.map((p: any) =>
+        p.type === petType ? { ...p, quantity } : p
+      )
+    }));
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setSuccessMsg('');
@@ -178,7 +209,8 @@ export default function ServicosPage() {
       const payload = {
         bio: editForm.bio,
         services: validServices,
-        availableDays: editForm.availableDays
+        availableDays: editForm.availableDays,
+        petQuantities: editForm.petQuantities
       };
 
       const updated = await apiUpdateProfile(profile._id, payload);
@@ -188,7 +220,8 @@ export default function ServicosPage() {
       // Update local state with latest data from backend
       setEditForm((prev: any) => ({
         ...prev,
-        services: updated.services || []
+        services: updated.services || [],
+        petQuantities: updated.petsQuantity || []
       }));
 
       setSuccessMsg('Configurações salvas com sucesso!');
@@ -378,6 +411,61 @@ export default function ServicosPage() {
                       >
                         {day.label}
                       </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="h-px bg-white/10"></div>
+
+              {/* Pet Types and Limits */}
+              <div className="space-y-4">
+                <label className="text-sm font-bold text-white flex items-center gap-2">
+                  Tipos de Pets e Limite Diário
+                </label>
+                <p className="text-sm text-gray-400">Selecione quais pets você aceita cuidar e a quantidade máxima por dia.</p>
+                
+                <div className="grid gap-3">
+                  {petTypeOptions.map((petType: any) => {
+                    const typeValue = typeof petType === 'string' ? petType : petType.name || petType.type;
+                    const isSelected = editForm.petQuantities?.some((p: any) => p.type === typeValue);
+                    const petData = editForm.petQuantities?.find((p: any) => p.type === typeValue);
+                    
+                    const labels: Record<string, string> = {
+                      dog: 'Cães',
+                      cat: 'Gatos',
+                      bird: 'Pássaros',
+                      other: 'Outros'
+                    };
+
+                    return (
+                      <div key={typeValue} className="flex flex-col sm:flex-row sm:items-center gap-4 bg-black/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                        <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handlePetTypeChange(typeValue, e.target.checked)}
+                            className="w-5 h-5 rounded border-white/10 text-[#FF6B35] focus:ring-[#FF6B35] bg-black"
+                          />
+                          <div>
+                            <span className="text-white font-medium capitalize">{labels[typeValue] || typeValue}</span>
+                          </div>
+                        </label>
+
+                        {isSelected && (
+                          <div className="flex items-center gap-3 ml-8 sm:ml-0">
+                            <span className="text-gray-400 text-sm font-medium">Limite por dia:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="20"
+                              value={petData?.quantity || 1}
+                              onChange={(e) => handlePetQuantityChange(typeValue, Number(e.target.value))}
+                              className="w-20 bg-black/50 border border-white/10 focus:border-[#FF6B35]/50 text-white rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#FF6B35]/50"
+                            />
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

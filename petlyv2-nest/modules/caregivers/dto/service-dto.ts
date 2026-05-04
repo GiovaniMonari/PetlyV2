@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export enum ServiceType {
   WALK = 'walk',
@@ -37,6 +37,10 @@ export const SERVICE_DEFAULTS = {
 };
 
 export class ServiceDto {
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
   @IsEnum(ServiceType)
   type!: ServiceType;
 

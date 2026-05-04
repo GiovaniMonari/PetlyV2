@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 import { ServiceType } from '../../caregivers/dto/service-dto';
+import { PetsQuantityDto } from '../../caregivers/dto/pets-quantity.dto';
 
 export type UserDocument = User & Document;
 
@@ -42,6 +43,9 @@ export class User {
   @Prop({ type: [String], enum: ['dog', 'cat', 'bird', 'other'], default: [] })
   petTypes?: string[];
 
+  @Prop({ type: [{ type: { type: String }, quantity: Number }], default: [] })
+  petsQuantity?: { type: string; quantity: number }[];
+
   @Prop({ default: 0 })
   price?: number;
 
@@ -70,6 +74,9 @@ export class User {
 
   @Prop({ default: true })
   isActive?: boolean;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'tutor' }], default: [] })
+  favorites?: Types.ObjectId[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

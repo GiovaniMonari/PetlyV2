@@ -85,4 +85,40 @@ export class UsersController {
   uploadAvatar(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
     return this.usersService.uploadAvatar(req.user.userId, file);
   }
+
+  /**
+   * GET /api/users/me/favorites
+   * Protected - Retorna a lista de cuidadores favoritados pelo tutor
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('me/favorites')
+  getFavoriteCaregivers(@Request() req: any) {
+    return this.usersService.getFavoriteCaregivers(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/favorites')
+  addFavoriteCaregiver(
+    @Param('id') tutorId: string,
+    @Body() { caregiverId }: { caregiverId: string },
+    @Request() req: any,
+  ) {
+    return this.usersService.addFavoriteCaregiver(
+      req.user.userId,
+      caregiverId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/favorites/:caregiverId')
+  removeFavoriteCaregiver(
+    @Param('id') tutorId: string,
+    @Param('caregiverId') caregiverId: string,
+    @Request() req: any,
+  ) {
+    return this.usersService.removeFavoriteCaregiver(
+      req.user.userId,
+      caregiverId,
+    );
+  }
 }

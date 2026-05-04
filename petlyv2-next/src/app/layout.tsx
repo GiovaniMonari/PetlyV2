@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: 'Cuidamos com amor e responsabilidade do seu melhor amigo.',
 };
 
+import { FavoritesProvider } from '@/context/FavoritesContext';
+
 export default function RootLayout({
   children,
 }: {
@@ -22,7 +24,9 @@ export default function RootLayout({
             border: '1px solid rgba(255,255,255,0.1)'
           }
         }} />
-        {children}
+        <FavoritesProvider>
+          {children}
+        </FavoritesProvider>
       </body>
     </html>
   );

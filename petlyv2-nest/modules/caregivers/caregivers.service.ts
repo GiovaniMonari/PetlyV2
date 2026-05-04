@@ -169,12 +169,20 @@ export class CaregiversService {
       throw new NotFoundException("ID inválido");
     }
 
-    const { services, ...rest } = updateCaregiverDto;
+    const { services, petQuantities, ...rest } = updateCaregiverDto;
 
-    if (Object.keys(rest).length > 0) {
+    const updateData: any = { ...rest };
+    if (services) {
+      updateData.services = services;
+    }
+    if (petQuantities) {
+      updateData.petsQuantity = petQuantities;
+    }
+
+    if (Object.keys(updateData).length > 0) {
       const result = await this.caregiverModel.updateOne(
         { _id: id },
-        { $set: rest },
+        { $set: updateData },
       );
 
       if (result.matchedCount === 0) {

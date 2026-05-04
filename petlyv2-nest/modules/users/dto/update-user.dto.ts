@@ -12,9 +12,11 @@ import {
 } from 'class-validator';
 import { CreateUserDto } from './create-user.dto';
 
-import { ServiceType } from '../../caregivers/dto/service-dto';
-
 class ServiceItemDto {
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
   @IsOptional()
   @IsString()
   type?: string;
@@ -27,6 +29,18 @@ class ServiceItemDto {
 
   @IsString()
   duration!: string;
+}
+
+class PetsQuantityItemDto {
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
+  @IsString()
+  type!: string;
+
+  @IsNumber()
+  quantity!: number;
 }
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
@@ -42,4 +56,10 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @Min(0, { each: true })
   @Max(6, { each: true })
   availableDays?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PetsQuantityItemDto)
+  petQuantities?: PetsQuantityItemDto[];
 }

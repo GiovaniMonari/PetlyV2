@@ -7,6 +7,7 @@ import { CreateCaregiverDto, CaregiverType } from './dto/create-caregiver.dto';
 import { UpdateCaregiverDto } from './dto/update-caregiver.dto';
 import { ServiceDto, SERVICE_DEFAULTS, ServiceType } from './dto/service-dto';
 import { UpdateServiceDto } from './dto/update-services.dto';
+import { PetsQuantityDto } from './dto/pets-quantity.dto';
 
 @Controller('caregivers')
 export class CaregiversController {
@@ -52,6 +53,16 @@ export class CaregiversController {
           : [defaultValue.duration],
       };
     });
+  }
+
+  @Get('pet-types')
+  getPetTypes() {
+    return Object.values(CaregiverType);
+  }
+
+  @Get('pets-quantities')
+  getPetsQuantities() {
+    return Object.values(PetsQuantityDto);
   }
 
   @Get(':id')

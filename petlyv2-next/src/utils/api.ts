@@ -213,8 +213,24 @@ export interface CaregiverServiceTypeOption {
   durations: string[];
 }
 
+export interface CaregiverPetTypeOption {
+  name: string;
+}
+
+export interface CaregiverPetsQuantityOption {
+  quantity: number;
+}
+
 export async function apiGetCaregiverServiceTypes(): Promise<CaregiverServiceTypeOption[]> {
   return request('/caregivers/service-types');
+}
+
+export async function apiGetCaregiverPetTypes(): Promise<CaregiverPetTypeOption[]> {
+  return request('/caregivers/pet-types');
+}
+
+export async function apiGetCaregiverPetsQuantities(): Promise<CaregiverPetsQuantityOption[]> {
+  return request('/caregivers/pets-quantities');
 }
 
 // ============================================================
@@ -227,6 +243,7 @@ export interface CreateBookingPayload {
   endDate: string;
   serviceType: string;
   petsCount: number;
+  petType: string;
   notes?: string;
 }
 
@@ -261,5 +278,24 @@ export async function apiSubmitBookingReview(
   return request(`/bookings/${id}/review`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function apiGetFavoriteCaregivers(): Promise<any[]> {
+  return request('/users/me/favorites');
+}
+
+export async function apiAddFavoriteCaregiver(caregiverId: string): Promise<any> {
+  return request('/users/me/favorites', {
+    method: 'POST',
+    body: JSON.stringify({ caregiverId }),
+  });
+}
+
+export async function apiRemoveFavoriteCaregiver(
+  caregiverId: string,
+): Promise<any> {
+  return request(`/users/me/favorites/${caregiverId}`, {
+    method: 'DELETE',
   });
 }

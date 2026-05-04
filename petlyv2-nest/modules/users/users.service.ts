@@ -65,7 +65,7 @@ export class UsersService {
     };
 
     if (filters.type && filters.type !== 'all') {
-      query.petTypes = filters.type;
+      query['petsQuantity.type'] = filters.type;
     }
 
     if (filters.location) {
@@ -134,6 +134,12 @@ export class UsersService {
 
     // If services are updated, calculate the min and max prices
     if (updateUserDto.services && updateUserDto.services.length > 0) {
+      // Remove _id from services if present
+      updateUserDto.services = updateUserDto.services.map((s: any) => {
+        const { _id, ...rest } = s;
+        return rest;
+      });
+
       const prices = updateUserDto.services.map(s => s.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
@@ -146,8 +152,18 @@ export class UsersService {
       (updateUserDto as any).maxPrice = 0;
     }
 
+    const { petQuantities, ...restUpdate } = updateUserDto;
+    const finalUpdate: any = { ...restUpdate };
+
+    if (petQuantities) {
+      finalUpdate.petsQuantity = petQuantities.map((p: any) => {
+        const { _id, ...rest } = p;
+        return rest;
+      });
+    }
+
     const user = await this.userModel
-      .findByIdAndUpdate(id, { $set: updateUserDto }, { new: true })
+      .findByIdAndUpdate(id, { $set: finalUpdate }, { new: true })
       .select('-password')
       .exec();
 
@@ -203,5 +219,49 @@ export class UsersService {
     
     user.avatar = result.secure_url;
     return user.save();
+  }
+
+  async addFavoriteCaregiver(
+    tutorId: string,
+    caregiverId: string,
+  ): Promise<UserDocument> {
+    const tutor = await this.findById(tutorId);
+    const caregiver = await this.findById(caregiverId);
+
+    if (!caregiver) {
+      throw new NotFoundException('Cuidador não encontrado');
+    }
+
+    if (!tutor.favorites.includes(caregiver._id)) {
+      tutor.favorites.push(caregiver._id);
+      await tutor.save();
+    }
+
+    return tutor;
+  }
+
+  async removeFavoriteCaregiver(
+    tutorId: string,
+    caregiverId: string,
+  ): Promise<UserDocument> {
+    const tutor = await this.findById(tutorId);
+
+    tutor.favorites = tutor.favorites.filter(
+      (id) => id.toString() !== caregiverId,
+    );
+
+    await tutor.save();
+    return tutor;
+  }
+
+  async getFavoriteCaregivers(tutorId: string): Promise<UserDocument[]> {
+    const tutor = await this.findById(tutorId);
+
+    const caregivers = await this.userModel
+      .find({ _id: { $in: tutor.favorites } })
+      .select('-password -cpf')
+      .exec();
+
+    return caregivers;
   }
 }

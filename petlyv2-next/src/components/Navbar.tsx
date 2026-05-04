@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PawPrint, Menu, X, LogOut, User } from 'lucide-react';
+import { PawPrint, Menu, X, LogOut, User, Heart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { getUser, logout } from '@/utils/api';
 
@@ -34,6 +34,8 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
     window.location.href = '/';
   };
 
+  const isTutor = user?.role === 'tutor';
+
   return (
     <nav className="bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-lg shadow-black/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -57,6 +59,20 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
                 }`}
               >
                 Encontrar Cuidador
+              </Link>
+            )}
+
+            {isTutor && (
+              <Link
+                href="/favoritos"
+                className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  pathname === '/favoritos'
+                    ? 'text-[#FF6B35]'
+                    : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${pathname === '/favoritos' ? 'fill-[#FF6B35]' : ''}`} />
+                Favoritos
               </Link>
             )}
 
@@ -110,6 +126,18 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
               }`}
             >
               Encontrar Cuidador
+            </Link>
+          )}
+          {isTutor && (
+            <Link
+              href="/favoritos"
+              onClick={() => setMobileOpen(false)}
+              className={`py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                pathname === '/favoritos' ? 'text-[#FF6B35]' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${pathname === '/favoritos' ? 'fill-[#FF6B35]' : ''}`} />
+              Favoritos
             </Link>
           )}
             {user ? (

@@ -41,6 +41,9 @@ export class Booking {
   @Prop({ required: true, default: 1 })
   petsCount!: number;
 
+  @Prop({ required: true, default: 'dog' })
+  petType!: string;
+
   @Prop({ required: true })
   totalDays!: number;
 

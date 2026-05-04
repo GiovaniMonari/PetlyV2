@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import { Service, ServiceSchema } from './services.schema';
+import { PetsQuantityDto } from '../dto/pets-quantity.dto';
 
 export type CaregiverDocument = Caregiver & Document;
 
@@ -39,6 +40,9 @@ export class Caregiver {
 
   @Prop({ enum: CaregiverType, required: true })
   type!: CaregiverType;
+
+  @Prop({ type: PetsQuantityDto, default: [] })
+  petsQuantity!: { type: string, quantity: number }[];
 
   @Prop({ default: 0 })
   price!: number;

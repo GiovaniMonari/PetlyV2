@@ -22,8 +22,10 @@ export class CreateBookingDto {
 
   @IsNumber()
   @Min(1)
-  @Max(10)
   petsCount!: number;
+
+  @IsString()
+  petType!: string;
 
   @IsOptional()
   @IsString()
