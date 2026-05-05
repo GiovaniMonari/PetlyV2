@@ -130,7 +130,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
         {/* Price and Button */}
         <div className="flex items-center justify-between pt-4 border-t border-white/10">
           <div>
-            <p className="text-xs text-gray-400 font-medium">A partir de</p>
+            <p className="text-xs text-gray-400 font-medium">Serviços a partir de</p>
             <p className="text-base font-bold text-white">
               R$ {(
                 Number(caregiver.minPrice) || 

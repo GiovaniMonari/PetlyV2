@@ -8,6 +8,8 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Loader2,
   MapPin,
@@ -15,6 +17,7 @@ import {
   PawPrint,
   ShieldCheck,
   Star,
+  XCircle,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -116,6 +119,95 @@ export default function CaregiverDetailPage() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
+
+  // Calendar state
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
+
+  // Calendar Helpers
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const nextMonth = () => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+  const prevMonth = () => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+
+  const handleDayClick = (dateStr: string) => {
+    // If not available, do nothing
+    if (!availableDatesForService.includes(dateStr)) return;
+
+    if (isShortService) {
+      setStartDate(dateStr);
+      setEndDate(dateStr);
+      setStartTime(''); // Reset time to force new selection
+      setIsTimeModalOpen(true);
+    } else {
+      // Range selection logic
+      if (!startDate || (startDate && endDate)) {
+        setStartDate(dateStr);
+        setEndDate('');
+      } else {
+        if (dateStr < startDate) {
+          setStartDate(dateStr);
+          setEndDate('');
+        } else {
+          setEndDate(dateStr);
+        }
+      }
+    }
+  };
+
+  const renderCalendar = () => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+    const days = [];
+
+    // Empty slots for days of previous month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="h-10 border border-white/5 bg-transparent"></div>);
+    }
+
+    const todayObj = new Date();
+    todayObj.setHours(0, 0, 0, 0);
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = date.toISOString().split('T')[0];
+      const isAvailable = availableDatesForService.includes(dateStr);
+      const isPast = date < todayObj;
+      
+      const isStart = startDate === dateStr;
+      const isEnd = endDate === dateStr;
+      const isInRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
+      
+      const isSelected = isStart || isEnd || isInRange;
+
+      days.push(
+        <button
+          key={day}
+          disabled={!isAvailable || isPast}
+          onClick={() => handleDayClick(dateStr)}
+          className={`h-10 md:h-12 border border-white/5 flex flex-col items-center justify-center relative transition-all text-xs font-bold ${
+            isStart || isEnd 
+              ? 'bg-[#FF6B35] text-white z-10' 
+              : isInRange 
+                ? 'bg-[#FF6B35]/20 text-[#FF6B35]' 
+                : isAvailable 
+                  ? 'hover:bg-white/10 text-white cursor-pointer' 
+                  : 'text-gray-600 cursor-not-allowed bg-black/20'
+          }`}
+        >
+          <span>{day}</span>
+          {isAvailable && !isSelected && (
+            <div className="absolute bottom-1 w-1 h-1 rounded-full bg-[#06A77D]"></div>
+          )}
+        </button>
+      );
+    }
+
+    return days;
+  };
 
   const currentUser = getUser();
   const isTutor = currentUser?.role === 'tutor';
@@ -604,18 +696,77 @@ export default function CaregiverDetailPage() {
             </div>
           </section>
 
-          <section className="lg:col-span-2 bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
-            <h2 className="text-2xl font-bold text-white mb-1">Nova reserva</h2>
-            <p className="text-sm text-gray-400 mb-6">
-              Escolha o serviço que o cuidador oferece e monte a reserva com base nesses dados.
-            </p>
+          <section className="lg:col-span-2 space-y-6">
+            {/* Serviços e Preços (Informativo) */}
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
+              <h2 className="text-xl font-bold text-white mb-1">Serviços e preços</h2>
+              <p className="text-xs text-gray-400 mb-6">
+                Valores definidos pelo cuidador e usados no cálculo estimado da reserva.
+              </p>
+
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {services.map((service) => (
+                  <article
+                    key={service.name}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-4 hover:border-[#FF6B35]/40 transition-colors"
+                  >
+                    <p className="text-xs font-bold text-white">{service.name}</p>
+                    <p className="text-[#FF6B35] text-lg font-bold mt-1">{formatCurrency(service.price)}</p>
+                    <p className="text-[10px] text-gray-400 mt-2">{service.duration}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            {/* Pets Aceitos (Informativo) */}
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
+              <h2 className="text-xl font-bold text-white mb-1">Pets aceitos</h2>
+              <p className="text-xs text-gray-400 mb-6">
+                Tipos de animais e quantidade máxima que o cuidador aceita por reserva.
+              </p>
+
+              <div className="flex flex-wrap gap-4">
+                {caregiver.petsQuantity && caregiver.petsQuantity.length > 0 ? (
+                  caregiver.petsQuantity.map((p) => (
+                    <div key={p.type} className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl p-4 min-w-[140px]">
+                      <div className="w-10 h-10 rounded-full bg-[#FF6B35]/10 flex items-center justify-center">
+                        <PawPrint className="w-5 h-5 text-[#FF6B35]" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white uppercase tracking-wider">{PET_TYPE_LABELS[p.type] || p.type}</p>
+                        <p className="text-[10px] text-gray-400 font-medium">Até {p.quantity} {p.quantity === 1 ? 'pet' : 'pets'}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                   petTypeLabels.map((label) => (
+                     <div key={label} className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl p-4">
+                       <PawPrint className="w-5 h-5 text-[#FF6B35]" />
+                       <span className="text-xs font-bold text-white">{label}</span>
+                     </div>
+                   ))
+                )}
+              </div>
+            </div>
+
+            {/* Nova reserva form */}
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
+              <h2 className="text-2xl font-bold text-white mb-1">Nova reserva</h2>
+              <p className="text-sm text-gray-400 mb-6">
+                Escolha o serviço que o cuidador oferece e monte a reserva com base nesses dados.
+              </p>
 
             <div className="grid sm:grid-cols-3 gap-4 mb-5">
               <div>
                 <label className="block text-sm font-semibold text-white mb-2">Serviço</label>
                 <select
                   value={selectedService}
-                  onChange={(event) => setSelectedService(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedService(event.target.value);
+                    setStartDate('');
+                    setEndDate('');
+                    setStartTime('');
+                  }}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
                 >
                   {services.map((service) => (
@@ -670,110 +821,111 @@ export default function CaregiverDetailPage() {
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4 mb-5">
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  {isShortService ? 'Data do serviço' : 'Data de início'}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-sm font-semibold text-white">
+                  {isShortService ? 'Selecione a data do serviço' : 'Selecione o período da reserva'}
                 </label>
-                {availableDatesForService.length > 0 ? (
-                  <select
-                    value={startDate}
-                    onChange={(event) => {
-                      setStartDate(event.target.value);
-                      if (isShortService) setEndDate(event.target.value);
-                    }}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                  >
-                    <option value="" className="bg-[#111]">Selecione uma data</option>
-                    {availableDatesForService
-                      .filter(d => d && d >= today)
-                      .sort()
-                      .map(dateStr => (
-                        <option key={dateStr} value={dateStr} className="bg-[#111]">
-                          {(() => {
-                            const d = new Date(dateStr + 'T12:00:00');
-                            return isNaN(d.getTime()) ? 'Data inválida' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
-                          })()}
-                        </option>
-                      ))
-                    }
-                  </select>
-                ) : (
-                  <input
-                    type="date"
-                    value={startDate}
-                    min={today}
-                    onChange={(event) => {
-                      setStartDate(event.target.value);
-                      if (isShortService) setEndDate(event.target.value);
-                    }}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                  />
+                <div className="flex items-center gap-2">
+                  <button onClick={prevMonth} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-bold text-white uppercase min-w-[120px] text-center">
+                    {calendarDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button onClick={nextMonth} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white transition-colors">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-px mb-1">
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => (
+                  <div key={d} className="text-center text-[10px] font-bold text-gray-500 py-1">{d}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-px border border-white/10 rounded-xl overflow-hidden bg-white/5 mb-3 relative">
+                {renderCalendar()}
+
+                {/* Time Selection Modal Overlay */}
+                {isTimeModalOpen && isShortService && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center p-2 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-[280px] p-4 shadow-2xl animate-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Horários p/ {new Date(startDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</h4>
+                        <button 
+                          onClick={() => setIsTimeModalOpen(false)}
+                          className="text-gray-500 hover:text-white transition-colors"
+                        >
+                          <XCircle className="w-5 h-5" />
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                        {(availableHoursForService.length > 0 ? availableHoursForService : ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']).map(hour => (
+                          <button
+                            key={hour}
+                            onClick={() => {
+                              setStartTime(hour);
+                              setIsTimeModalOpen(false);
+                            }}
+                            className={`py-2 rounded-lg text-[10px] font-bold transition-all border ${
+                              startTime === hour
+                                ? 'bg-[#FF6B35] text-white border-[#FF6B35]'
+                                : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            {hour}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button 
+                        onClick={() => setIsTimeModalOpen(false)}
+                        className="w-full mt-4 py-2 bg-white/5 hover:bg-white/10 text-white text-[10px] font-bold rounded-lg transition-colors border border-white/5"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {!isShortService && (
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">Data de término</label>
-                  {availableDatesForService.length > 0 ? (
-                    <select
-                      value={endDate}
-                      onChange={(event) => setEndDate(event.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                    >
-                      <option value="" className="bg-[#111]">Selecione uma data</option>
-                      {availableDatesForService
-                        .filter(d => d && d >= (startDate || today))
-                        .sort()
-                        .map(dateStr => (
-                          <option key={dateStr} value={dateStr} className="bg-[#111]">
-                            {(() => {
-                              const d = new Date(dateStr + 'T12:00:00');
-                              return isNaN(d.getTime()) ? 'Data inválida' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
-                            })()}
-                          </option>
-                        ))
-                      }
-                    </select>
-                  ) : (
-                    <input
-                      type="date"
-                      value={endDate}
-                      min={startDate || today}
-                      onChange={(event) => setEndDate(event.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                    />
-                  )}
+              <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-500 font-medium">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-[#06A77D]"></div>
+                  <span>Disponível</span>
                 </div>
-              )}
-
-              {isShortService && (
-                <div>
-                  <label className="block text-sm font-semibold text-white mb-2">Horário de início</label>
-                  <select
-                    value={startTime}
-                    onChange={(event) => setStartTime(event.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                  >
-                    <option value="" className="bg-[#111]">Selecione um horário</option>
-                    {availableHoursForService.map(hour => (
-                      <option key={hour} value={hour} className="bg-[#111]">{hour}</option>
-                    ))}
-                    {availableHoursForService.length === 0 && (
-                      <option value="08:00" className="bg-[#111]">08:00 (Padrão)</option>
-                    )}
-                  </select>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-[#FF6B35]"></div>
+                  <span>Selecionado</span>
                 </div>
-              )}
+                {startDate && (
+                  <div className="flex items-center gap-1 text-[#FF6B35] font-bold ml-auto">
+                    {new Date(startDate + 'T12:00:00').toLocaleDateString('pt-BR')} 
+                    {endDate && endDate !== startDate && ` - ${new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                    {isShortService && startTime && ` às ${startTime}`}
+                  </div>
+                )}
+              </div>
             </div>
 
             {isShortService && startTime && (
-              <div className="mb-5 p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
-                <span className="text-sm text-gray-400">Horário estimado de término:</span>
-                <span className="text-sm font-bold text-white flex items-center gap-2">
-                  <Clock3 className="w-4 h-4 text-[#FF6B35]" />
-                  {endTimeCalculated}
-                </span>
+              <div className="mb-6 p-4 bg-[#FF6B35]/5 border border-[#FF6B35]/20 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-[#FF6B35] uppercase mb-1">Horário Selecionado</span>
+                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                    <Clock3 className="w-4 h-4" />
+                    {startTime} às {endTimeCalculated}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setIsTimeModalOpen(true)}
+                  className="text-xs text-[#FF6B35] hover:underline font-semibold"
+                >
+                  Alterar
+                </button>
               </div>
             )}
 
@@ -860,28 +1012,10 @@ export default function CaregiverDetailPage() {
                 Apenas contas de tutor podem criar reservas.
               </p>
             )}
-          </section>
-        </div>
-
-        <section className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 mb-8">
-          <h2 className="text-2xl font-bold text-white mb-1">Serviços e preços</h2>
-          <p className="text-sm text-gray-400 mb-6">
-            Valores definidos pelo cuidador e usados no cálculo estimado da reserva.
-          </p>
-
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {services.map((service) => (
-              <article
-                key={service.name}
-                className="rounded-2xl border border-white/10 bg-black/30 p-4 hover:border-[#FF6B35]/40 transition-colors"
-              >
-                <p className="text-sm font-bold text-white">{service.name}</p>
-                <p className="text-[#FF6B35] text-xl font-bold mt-1">{formatCurrency(service.price)}</p>
-                <p className="text-xs text-gray-400 mt-2">{service.duration}</p>
-              </article>
-            ))}
           </div>
         </section>
+        </div>
+
 
         <section className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
           <h2 className="text-2xl font-bold text-white mb-1">Avaliação pós-serviço</h2>

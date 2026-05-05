@@ -476,7 +476,7 @@ export default function PerfilPage() {
                        <p className="text-sm text-gray-500 mt-1">Atualize sua senha de acesso</p>
                      </div>
                      <button className="px-4 py-2 bg-white/10 text-white text-sm font-semibold rounded-lg hover:bg-white/20 transition-colors">
-                       Alterar
+                      <Link href="/forget-password">Alterar</Link>
                      </button>
                    </div>
 

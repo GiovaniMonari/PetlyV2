@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, CheckCircle2, Mail, PawPrint } from 'lucide-react';
-import { apiForgetPassword } from '@/utils/api';
+import { apiForgetPassword, isAuthenticated } from '@/utils/api';
 
 const DEFAULT_SUCCESS_MESSAGE =
   'Se o e-mail informado estiver cadastrado, enviaremos as instruções de recuperação em instantes.';
@@ -14,6 +14,11 @@ export default function ForgetPasswordPage() {
   const [isSent, setIsSent] = useState(false);
   const [successMessage, setSuccessMessage] = useState(DEFAULT_SUCCESS_MESSAGE);
   const [error, setError] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setIsLoggedIn(isAuthenticated());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,10 +75,10 @@ export default function ForgetPasswordPage() {
 
               <div className="mt-6 flex flex-col gap-3">
                 <Link
-                  href="/login"
+                  href={isLoggedIn ? "/perfil" : "/login"}
                   className="w-full inline-flex items-center justify-center gap-2 bg-[#FF6B35] text-white font-semibold rounded-xl py-3 px-4 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Ir para login <ArrowRight className="w-5 h-5" />
+                  {isLoggedIn ? "Ir para o perfil" : "Ir para login"} <ArrowRight className="w-5 h-5" />
                 </Link>
                 <button
                   type="button"
@@ -127,8 +132,8 @@ export default function ForgetPasswordPage() {
         </div>
 
         <div className="mt-8 text-center">
-          <Link href="/login" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Voltar para o login
+          <Link href={isLoggedIn ? "/perfil" : "/login"} className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-white transition-colors">
+            <ArrowLeft className="w-4 h-4" /> {isLoggedIn ? "Voltar para o perfil" : "Voltar para o login"}
           </Link>
         </div>
       </div>
