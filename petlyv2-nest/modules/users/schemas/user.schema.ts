@@ -63,8 +63,14 @@ export class User {
   }], default: [] })
   services?: { type: ServiceType; name: string; price: number; duration: string }[];
 
-  @Prop({ type: [Number], default: [0, 1, 2, 3, 4, 5, 6] }) // 0 = Sunday, 1 = Monday, etc.
-  availableDays?: number[];
+  @Prop({ type: [String], default: [] })
+  availableDays?: string[];
+
+  @Prop({ type: [String], default: [] })
+  serviceHours?: string[];  
+
+  @Prop({ type: [{ service: String, availableDays: [String], serviceHours: [String] }], default: [] })
+  availability?: { service: ServiceType, availableDays: string[], serviceHours: string[] }[];
 
   @Prop({ default: 0 })
   rating?: number;

@@ -14,6 +14,7 @@ import { UpdateCaregiverDto } from "./dto/update-caregiver.dto";
 import { ServiceDto } from "./dto/service-dto";
 import { UpdateServiceDto } from "./dto/update-services.dto";
 import * as bcrypt from "bcrypt";
+import { AvailabilityDto } from "./dto/availability.dto";
 
 const SERVICE_DEFAULTS: Record<
   ServiceDto["type"],
@@ -169,7 +170,7 @@ export class CaregiversService {
       throw new NotFoundException("ID inválido");
     }
 
-    const { services, petQuantities, ...rest } = updateCaregiverDto;
+    const { services, petQuantities, availability, ...rest } = updateCaregiverDto;
 
     const updateData: any = { ...rest };
     if (services) {
@@ -178,6 +179,9 @@ export class CaregiversService {
     if (petQuantities) {
       updateData.petsQuantity = petQuantities;
     }
+    if (availability) {
+      updateData.availability = availability;
+    } 
 
     if (Object.keys(updateData).length > 0) {
       const result = await this.caregiverModel.updateOne(
@@ -307,6 +311,62 @@ export class CaregiversService {
     }
 
     return created;
+  }
+  
+  async addAvailability(id: string, availability: AvailabilityDto): Promise<CaregiverDocument> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException("ID inválido");
+    }
+
+    const caregiver = await this.caregiverModel.findById(id).exec();
+    if (!caregiver) {
+      throw new NotFoundException("Caregiver não encontrado");
+    }
+
+    const newAvailability = {
+      ...availability,
+      service: availability.service,
+      serviceHours: availability.serviceHours,
+    };
+
+    const updatedCaregiver = await this.caregiverModel.findByIdAndUpdate(
+      id,
+      {
+        $push: { availability: newAvailability },
+      },
+      { new: true },
+    );
+
+    if (!updatedCaregiver) {
+      throw new NotFoundException("Caregiver não encontrado");
+    }
+
+    return updatedCaregiver;
+  }
+
+  async updateAvailability(id: string, availability: AvailabilityDto): Promise<CaregiverDocument> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException("ID inválido");
+    }
+
+    const caregiver = await this.caregiverModel.findById(id).exec();
+    if (!caregiver) {
+      throw new NotFoundException("Caregiver não encontrado");
+    }
+
+    const updatedCaregiver = await this.caregiverModel.findByIdAndUpdate(
+      id,
+      {
+        $set: { availability },
+      },
+      { new: true },
+    );
+
+    if (!updatedCaregiver) {
+      throw new NotFoundException("Caregiver não encontrado");
+    }
+
+    return updatedCaregiver;
   }
 
   async remove(id: string): Promise<void> {

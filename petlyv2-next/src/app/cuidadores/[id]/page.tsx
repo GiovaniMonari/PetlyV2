@@ -31,6 +31,7 @@ type CaregiverService = {
   name: string;
   price: number;
   duration: string;
+  type: string;
 };
 
 type CaregiverProfile = {
@@ -43,7 +44,13 @@ type CaregiverProfile = {
   specialties?: string[];
   petTypes?: string[];
   petsQuantity?: { type: string; quantity: number }[];
-  availableDays?: number[];
+  availableDays?: string[];
+  serviceHours?: string[];
+  availability?: {
+    service: string;
+    availableDays: string[];
+    serviceHours: string[];
+  }[];
   services?: CaregiverService[];
   price?: number;
   rating?: number;
@@ -102,6 +109,7 @@ export default function CaregiverDetailPage() {
   const [bookingError, setBookingError] = useState('');
   const [bookingSuccess, setBookingSuccess] = useState('');
 
+  const [startTime, setStartTime] = useState('');
   const [selectedBookingId, setSelectedBookingId] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
@@ -130,6 +138,7 @@ export default function CaregiverDetailPage() {
     return [
       {
         name: 'Hospedagem',
+        type: 'boarding',
         price: caregiver.price || 0,
         duration: 'Diária (24h)',
       },
@@ -144,33 +153,104 @@ export default function CaregiverDetailPage() {
   const totalDays = useMemo(() => {
     if (!startDate || !endDate) return 0;
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
     const diff = end.getTime() - start.getTime();
 
     if (Number.isNaN(diff)) return 0;
-    if (diff <= 0) return 0;
+    if (diff < 0) return 0;
 
-    return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    // We add 1 because if you book from 10th to 10th, it's 1 day.
+    // If you book from 10th to 11th, it's 2 days (or depends on service type).
+    // For Petly, it seems we use "total days of care".
+    return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)) + 1);
   }, [startDate, endDate]);
 
+  const isShortService = useMemo(() => {
+    if (!selectedServiceData) return false;
+    const duration = (selectedServiceData.duration || '').toLowerCase();
+    return duration.includes('min') || (duration.includes('h') && !duration.includes('24h') && !duration.includes('12h') && !duration.includes('diária') && !duration.includes('pernoite'));
+  }, [selectedServiceData]);
+
+
+
+  const endTimeCalculated = useMemo(() => {
+    if (!startTime || !selectedServiceData) return '';
+    const durationStr = (selectedServiceData.duration || '').toLowerCase();
+    let minutesToAdd = 60;
+
+    if (durationStr.includes('min')) {
+      minutesToAdd = parseInt(durationStr) || 60;
+    } else if (durationStr.includes('h')) {
+      minutesToAdd = (parseInt(durationStr) || 1) * 60;
+    }
+
+    const [h, m] = startTime.split(':').map(Number);
+    const date = new Date();
+    date.setHours(h, m + minutesToAdd, 0);
+    
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }, [startTime, selectedServiceData]);
+
   const estimatedTotal = useMemo(() => {
-    const pricePerDay = selectedServiceData?.price ?? caregiver?.price ?? 0;
-    if (!pricePerDay) return 0;
-    if (totalDays === 0) return pricePerDay;
-    return totalDays * pricePerDay;
-  }, [selectedServiceData, caregiver, totalDays]);
+    const pricePerUnit = selectedServiceData?.price ?? caregiver?.price ?? 0;
+    if (!pricePerUnit) return 0;
+    
+    if (isShortService) {
+      return pricePerUnit * petsCount;
+    }
+
+    if (totalDays === 0) return pricePerUnit * petsCount;
+    return totalDays * pricePerUnit * petsCount;
+  }, [selectedServiceData, caregiver, totalDays, isShortService, petsCount]);
+
+  const selectedServiceType = useMemo(() => {
+    return services.find(s => s.name === selectedService)?.type;
+  }, [services, selectedService]);
+
+  const availableDatesForService = useMemo(() => {
+    if (!caregiver || !selectedService) return [];
+    
+    const serviceAvail = caregiver.availability?.find(a => 
+      (selectedServiceType && a.service === selectedServiceType) || 
+      (a.service === selectedService)
+    );
+
+    if (serviceAvail && Array.isArray(serviceAvail.availableDays)) {
+      return serviceAvail.availableDays;
+    }
+
+    if (Array.isArray(caregiver.availableDays) && caregiver.availableDays.length > 0 && typeof caregiver.availableDays[0] === 'string') {
+      return caregiver.availableDays as string[];
+    }
+
+    return [];
+  }, [caregiver, selectedService, selectedServiceType]);
+
+  const availableHoursForService = useMemo(() => {
+    if (!caregiver || !selectedService) return [];
+    const serviceAvail = caregiver.availability?.find(a => 
+      (selectedServiceType && a.service === selectedServiceType) || 
+      (a.service === selectedService)
+    );
+    return serviceAvail?.serviceHours || [];
+  }, [caregiver, selectedService, selectedServiceType]);
 
   const availableDayLabels = useMemo(() => {
+    if (availableDatesForService.length > 0) {
+      return [`${availableDatesForService.length} datas disponíveis`];
+    }
+
+    // Fallback to legacy availableDays (numbers 0-6)
     const rawDays =
-      Array.isArray(caregiver?.availableDays) && caregiver.availableDays.length > 0
-        ? [...caregiver.availableDays].sort((a, b) => a - b)
+      Array.isArray(caregiver?.availableDays) && caregiver.availableDays.length > 0 && typeof caregiver.availableDays[0] === 'number'
+        ? [...caregiver.availableDays as unknown as number[]].sort((a, b) => a - b)
         : [0, 1, 2, 3, 4, 5, 6];
 
     return rawDays
       .filter((day) => day >= 0 && day <= 6)
       .map((day) => DAYS_OF_WEEK[day]);
-  }, [caregiver?.availableDays]);
+  }, [caregiver?.availableDays, availableDatesForService]);
 
   const petTypeLabels = useMemo(() => {
     if (!Array.isArray(caregiver?.petTypes) || caregiver.petTypes.length === 0) {
@@ -310,6 +390,25 @@ export default function CaregiverDetailPage() {
       return;
     }
 
+    // Availability validation
+    if (availableDatesForService.length > 0) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const missingDays = [];
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        if (!availableDatesForService.includes(dateStr)) {
+          missingDays.push(d.toLocaleDateString('pt-BR'));
+        }
+      }
+
+      if (missingDays.length > 0) {
+        setBookingError(`O cuidador não está disponível em: ${missingDays.slice(0, 3).map(d => d).join(', ')}${missingDays.length > 3 ? '...' : ''}`);
+        return;
+      }
+    }
+
     setIsBooking(true);
     setBookingError('');
     setBookingSuccess('');
@@ -318,12 +417,14 @@ export default function CaregiverDetailPage() {
       await apiCreateBooking({
         caregiverId,
         startDate,
-        endDate,
+        endDate: isShortService ? startDate : endDate,
         serviceType: selectedServiceData.name,
         petsCount,
         petType: selectedPetType,
         notes: notes.trim() || undefined,
-      });
+        startTime: isShortService ? startTime : undefined,
+        endTime: isShortService ? endTimeCalculated : undefined,
+      } as any);
 
       setBookingSuccess('Reserva criada com sucesso. Aguarde a confirmação do cuidador.');
       setNotes('');
@@ -571,27 +672,118 @@ export default function CaregiverDetailPage() {
 
             <div className="grid sm:grid-cols-2 gap-4 mb-5">
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">Data de início</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  min={today}
-                  onChange={(event) => setStartDate(event.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                />
+                <label className="block text-sm font-semibold text-white mb-2">
+                  {isShortService ? 'Data do serviço' : 'Data de início'}
+                </label>
+                {availableDatesForService.length > 0 ? (
+                  <select
+                    value={startDate}
+                    onChange={(event) => {
+                      setStartDate(event.target.value);
+                      if (isShortService) setEndDate(event.target.value);
+                    }}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
+                  >
+                    <option value="" className="bg-[#111]">Selecione uma data</option>
+                    {availableDatesForService
+                      .filter(d => d && d >= today)
+                      .sort()
+                      .map(dateStr => (
+                        <option key={dateStr} value={dateStr} className="bg-[#111]">
+                          {(() => {
+                            const d = new Date(dateStr + 'T12:00:00');
+                            return isNaN(d.getTime()) ? 'Data inválida' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
+                          })()}
+                        </option>
+                      ))
+                    }
+                  </select>
+                ) : (
+                  <input
+                    type="date"
+                    value={startDate}
+                    min={today}
+                    onChange={(event) => {
+                      setStartDate(event.target.value);
+                      if (isShortService) setEndDate(event.target.value);
+                    }}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
+                  />
+                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">Data de término</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  min={startDate || today}
-                  onChange={(event) => setEndDate(event.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                />
-              </div>
+              {!isShortService && (
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">Data de término</label>
+                  {availableDatesForService.length > 0 ? (
+                    <select
+                      value={endDate}
+                      onChange={(event) => setEndDate(event.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
+                    >
+                      <option value="" className="bg-[#111]">Selecione uma data</option>
+                      {availableDatesForService
+                        .filter(d => d && d >= (startDate || today))
+                        .sort()
+                        .map(dateStr => (
+                          <option key={dateStr} value={dateStr} className="bg-[#111]">
+                            {(() => {
+                              const d = new Date(dateStr + 'T12:00:00');
+                              return isNaN(d.getTime()) ? 'Data inválida' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
+                            })()}
+                          </option>
+                        ))
+                      }
+                    </select>
+                  ) : (
+                    <input
+                      type="date"
+                      value={endDate}
+                      min={startDate || today}
+                      onChange={(event) => setEndDate(event.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
+                    />
+                  )}
+                </div>
+              )}
+
+              {isShortService && (
+                <div>
+                  <label className="block text-sm font-semibold text-white mb-2">Horário de início</label>
+                  <select
+                    value={startTime}
+                    onChange={(event) => setStartTime(event.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
+                  >
+                    <option value="" className="bg-[#111]">Selecione um horário</option>
+                    {availableHoursForService.map(hour => (
+                      <option key={hour} value={hour} className="bg-[#111]">{hour}</option>
+                    ))}
+                    {availableHoursForService.length === 0 && (
+                      <option value="08:00" className="bg-[#111]">08:00 (Padrão)</option>
+                    )}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {isShortService && startTime && (
+              <div className="mb-5 p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                <span className="text-sm text-gray-400">Horário estimado de término:</span>
+                <span className="text-sm font-bold text-white flex items-center gap-2">
+                  <Clock3 className="w-4 h-4 text-[#FF6B35]" />
+                  {endTimeCalculated}
+                </span>
+              </div>
+            )}
+
+            {availableDatesForService.length > 0 && (
+              <div className="mb-5 p-4 bg-[#FF6B35]/5 border border-[#FF6B35]/20 rounded-2xl">
+                <p className="text-xs font-bold text-[#FF6B35] uppercase mb-2 flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4" /> Info: Apenas datas com disponibilidade confirmada aparecem acima.
+                </p>
+              </div>
+            )}
 
             <div className="mb-5">
               <label className="block text-sm font-semibold text-white mb-2">Observações (opcional)</label>

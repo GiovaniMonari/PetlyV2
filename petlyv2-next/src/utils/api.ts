@@ -233,6 +233,20 @@ export async function apiGetCaregiverPetsQuantities(): Promise<CaregiverPetsQuan
   return request('/caregivers/pets-quantities');
 }
 
+export async function apiUpdateAvailability(id: string, availability: any): Promise<any> {
+  return request(`/caregivers/${id}/availability`, {
+    method: 'PATCH',
+    body: JSON.stringify(availability),
+  });
+}
+
+export async function apiAddAvailability(id: string, availability: any): Promise<any> {
+  return request(`/caregivers/${id}/availability`, {
+    method: 'POST',
+    body: JSON.stringify(availability),
+  });
+}
+
 // ============================================================
 // Bookings API
 // ============================================================

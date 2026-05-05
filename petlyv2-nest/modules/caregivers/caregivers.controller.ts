@@ -8,6 +8,7 @@ import { UpdateCaregiverDto } from './dto/update-caregiver.dto';
 import { ServiceDto, SERVICE_DEFAULTS, ServiceType } from './dto/service-dto';
 import { UpdateServiceDto } from './dto/update-services.dto';
 import { PetsQuantityDto } from './dto/pets-quantity.dto';
+import { AvailabilityDto } from './dto/availability.dto';
 
 @Controller('caregivers')
 export class CaregiversController {
@@ -85,6 +86,22 @@ export class CaregiversController {
     @Body() updateServiceDto: UpdateServiceDto,
   ) {
     return this.caregiversService.updateService(id, type, updateServiceDto);
+  }
+
+  @Post(':id/availability')
+  addAvailability(
+    @Param('id') id: string,
+    @Body() availability: AvailabilityDto,
+  ) {
+    return this.caregiversService.addAvailability(id, availability);
+  }
+
+  @Patch(':id/availability')
+  updateAvailability(
+    @Param('id') id: string,
+    @Body() availability: AvailabilityDto,
+  ) {
+    return this.caregiversService.updateAvailability(id, availability);
   }
 
   @Delete(':id')

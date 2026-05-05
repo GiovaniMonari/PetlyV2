@@ -9,7 +9,9 @@ import {
   Briefcase,
   CheckCircle2,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  PawPrint,
+  Calendar
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -23,30 +25,19 @@ import {
   setUser as setLocalUser,
 } from '@/utils/api';
 
-const DAYS_OF_WEEK = [
-  { id: 0, label: 'Domingo' },
-  { id: 1, label: 'Segunda' },
-  { id: 2, label: 'Terça' },
-  { id: 3, label: 'Quarta' },
-  { id: 4, label: 'Quinta' },
-  { id: 5, label: 'Sexta' },
-  { id: 6, label: 'Sábado' },
-];
+
 
 export default function ServicosPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [serviceOptions, setServiceOptions] = useState<CaregiverServiceTypeOption[]>([]);
-  const [petTypeOptions, setPetTypeOptions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   const [editForm, setEditForm] = useState<any>({
     bio: '',
-    services: [],
-    availableDays: [0, 1, 2, 3, 4, 5, 6],
-    petQuantities: []
+    services: []
   });
 
   useEffect(() => {
@@ -57,10 +48,9 @@ export default function ServicosPage() {
 
     const fetchData = async () => {
       try {
-        const [profileData, caregiverServiceTypes, caregiverPetTypes] = await Promise.all([
+        const [profileData, caregiverServiceTypes] = await Promise.all([
           apiGetProfile(),
           apiGetCaregiverServiceTypes(),
-          apiGetCaregiverPetTypes(),
         ]);
 
         if (profileData.role !== 'caregiver') {
@@ -69,7 +59,6 @@ export default function ServicosPage() {
         }
 
         setServiceOptions(caregiverServiceTypes || []);
-        setPetTypeOptions((caregiverPetTypes as any) || []);
 
         const allowedServiceNames = new Set(
           (caregiverServiceTypes || []).map((service) => service.name),
@@ -88,9 +77,7 @@ export default function ServicosPage() {
         setProfile(profileData);
         setEditForm({
           bio: profileData.bio || '',
-          services: filteredServices,
-          availableDays: profileData.availableDays || [0, 1, 2, 3, 4, 5, 6],
-          petQuantities: profileData.petsQuantity || []
+          services: filteredServices
         });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -145,45 +132,9 @@ export default function ServicosPage() {
     }));
   };
 
-  const handleDayChange = (dayId: number) => {
-    const isSelected = editForm.availableDays.includes(dayId);
-    if (isSelected) {
-      setEditForm({
-        ...editForm,
-        availableDays: editForm.availableDays.filter((d: number) => d !== dayId)
-      });
-    } else {
-      setEditForm({
-        ...editForm,
-        availableDays: [...editForm.availableDays, dayId].sort()
-      });
-    }
-  };
 
-  const handlePetTypeChange = (petType: string, isChecked: boolean) => {
-    setEditForm((prev: any) => {
-      if (isChecked) {
-        return {
-          ...prev,
-          petQuantities: [...prev.petQuantities, { type: petType, quantity: 1 }]
-        };
-      } else {
-        return {
-          ...prev,
-          petQuantities: prev.petQuantities.filter((p: any) => p.type !== petType)
-        };
-      }
-    });
-  };
 
-  const handlePetQuantityChange = (petType: string, quantity: number) => {
-    setEditForm((prev: any) => ({
-      ...prev,
-      petQuantities: prev.petQuantities.map((p: any) =>
-        p.type === petType ? { ...p, quantity } : p
-      )
-    }));
-  };
+
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -208,9 +159,7 @@ export default function ServicosPage() {
 
       const payload = {
         bio: editForm.bio,
-        services: validServices,
-        availableDays: editForm.availableDays,
-        petQuantities: editForm.petQuantities
+        services: validServices
       };
 
       const updated = await apiUpdateProfile(profile._id, payload);
@@ -220,8 +169,7 @@ export default function ServicosPage() {
       // Update local state with latest data from backend
       setEditForm((prev: any) => ({
         ...prev,
-        services: updated.services || [],
-        petQuantities: updated.petsQuantity || []
+        services: updated.services || []
       }));
 
       setSuccessMsg('Configurações salvas com sucesso!');
@@ -276,6 +224,12 @@ export default function ServicosPage() {
                 </Link>
                 <Link href="/dashboard/servicos" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#FF6B35] text-white font-medium text-sm shadow-lg shadow-[#FF6B35]/20">
                   <Settings className="w-4 h-4" /> Serviços & Preços
+                </Link>
+                <Link href="/dashboard/disponibilidade" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
+                  <Calendar className="w-4 h-4" /> Disponibilidade
+                </Link>
+                <Link href="/dashboard/capacidade" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
+                  <PawPrint className="w-4 h-4" /> Capacidade de Pets
                 </Link>
                 <Link href="/perfil" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
                   <User className="w-4 h-4" /> Meu Perfil
@@ -390,86 +344,9 @@ export default function ServicosPage() {
                 </div>
               </div>
 
-              <div className="h-px bg-white/10"></div>
 
-              {/* Days Available */}
-              <div className="space-y-4">
-                <label className="text-sm font-bold text-white flex items-center gap-2">
-                  Dias de Atendimento
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {DAYS_OF_WEEK.map(day => {
-                    const isSelected = editForm.availableDays?.includes(day.id);
-                    return (
-                      <button
-                        key={day.id}
-                        onClick={() => handleDayChange(day.id)}
-                        className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all border ${isSelected
-                            ? 'bg-[#06A77D]/10 text-[#06A77D] border-[#06A77D]/30 shadow-sm'
-                            : 'bg-black/30 text-gray-400 border-white/5 hover:border-white/20'
-                          }`}
-                      >
-                        {day.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              <div className="h-px bg-white/10"></div>
 
-              {/* Pet Types and Limits */}
-              <div className="space-y-4">
-                <label className="text-sm font-bold text-white flex items-center gap-2">
-                  Tipos de Pets e Limite Diário
-                </label>
-                <p className="text-sm text-gray-400">Selecione quais pets você aceita cuidar e a quantidade máxima por dia.</p>
-                
-                <div className="grid gap-3">
-                  {petTypeOptions.map((petType: any) => {
-                    const typeValue = typeof petType === 'string' ? petType : petType.name || petType.type;
-                    const isSelected = editForm.petQuantities?.some((p: any) => p.type === typeValue);
-                    const petData = editForm.petQuantities?.find((p: any) => p.type === typeValue);
-                    
-                    const labels: Record<string, string> = {
-                      dog: 'Cães',
-                      cat: 'Gatos',
-                      bird: 'Pássaros',
-                      other: 'Outros'
-                    };
-
-                    return (
-                      <div key={typeValue} className="flex flex-col sm:flex-row sm:items-center gap-4 bg-black/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
-                        <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => handlePetTypeChange(typeValue, e.target.checked)}
-                            className="w-5 h-5 rounded border-white/10 text-[#FF6B35] focus:ring-[#FF6B35] bg-black"
-                          />
-                          <div>
-                            <span className="text-white font-medium capitalize">{labels[typeValue] || typeValue}</span>
-                          </div>
-                        </label>
-
-                        {isSelected && (
-                          <div className="flex items-center gap-3 ml-8 sm:ml-0">
-                            <span className="text-gray-400 text-sm font-medium">Limite por dia:</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max="20"
-                              value={petData?.quantity || 1}
-                              onChange={(e) => handlePetQuantityChange(typeValue, Number(e.target.value))}
-                              className="w-20 bg-black/50 border border-white/10 focus:border-[#FF6B35]/50 text-white rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#FF6B35]/50"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
 
             </div>
           </div>

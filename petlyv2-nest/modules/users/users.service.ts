@@ -152,12 +152,19 @@ export class UsersService {
       (updateUserDto as any).maxPrice = 0;
     }
 
-    const { petQuantities, ...restUpdate } = updateUserDto;
+    const { petQuantities, availability, ...restUpdate } = updateUserDto;
     const finalUpdate: any = { ...restUpdate };
 
     if (petQuantities) {
       finalUpdate.petsQuantity = petQuantities.map((p: any) => {
         const { _id, ...rest } = p;
+        return rest;
+      });
+    }
+
+    if (availability) {
+      finalUpdate.availability = availability.map((a: any) => {
+        const { _id, ...rest } = a;
         return rest;
       });
     }

@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { Service, ServiceSchema } from './services.schema';
+import { Service, ServiceSchema, ServiceType } from './services.schema';
 import { PetsQuantityDto } from '../dto/pets-quantity.dto';
 
 export type CaregiverDocument = Caregiver & Document;
@@ -55,6 +55,9 @@ export class Caregiver {
 
   @Prop({ type: [ServiceSchema], default: [] })
   services!: Service[];
+
+  @Prop({ type: [{ service: String, availableDays: [String], serviceHours: [String] }], default: [] })
+  availability!: { service: ServiceType, availableDays: string[], serviceHours: string[] }[];
 
   @Prop({ default: true })
   isActive!: boolean;

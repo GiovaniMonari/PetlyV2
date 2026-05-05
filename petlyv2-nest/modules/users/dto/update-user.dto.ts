@@ -52,14 +52,21 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   @IsArray()
-  @IsInt({ each: true })
-  @Min(0, { each: true })
-  @Max(6, { each: true })
-  availableDays?: number[];
-
-  @IsOptional()
-  @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PetsQuantityItemDto)
   petQuantities?: PetsQuantityItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  availableDays?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  serviceHours?: string[];
+
+  @IsOptional()
+  @IsArray()
+  availability?: any[];
 }

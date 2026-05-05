@@ -4,6 +4,7 @@ import { IsOptional, IsArray, ValidateNested, IsEnum, IsString, IsNumber } from 
 import { Type } from 'class-transformer';
 import { ServiceDto } from './service-dto';
 import { PetsQuantityDto } from './pets-quantity.dto';
+import { AvailabilityDto } from './availability.dto';
 
 export class UpdateCaregiverDto extends PartialType(CreateCaregiverDto) {
   @IsOptional()
@@ -25,4 +26,10 @@ export class UpdateCaregiverDto extends PartialType(CreateCaregiverDto) {
   @ValidateNested({ each: true })
   @Type(() => PetsQuantityDto)
   petQuantities?: PetsQuantityDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AvailabilityDto)
+  availability?: AvailabilityDto[];
 }

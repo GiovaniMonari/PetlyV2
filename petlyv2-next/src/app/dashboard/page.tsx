@@ -135,6 +135,12 @@ export default function DashboardPage() {
                 <Link href="/dashboard/servicos" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
                   <Settings className="w-4 h-4" /> Serviços & Preços
                 </Link>
+                <Link href="/dashboard/disponibilidade" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
+                  <Calendar className="w-4 h-4" /> Disponibilidade
+                </Link>
+                <Link href="/dashboard/capacidade" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
+                  <PawPrint className="w-4 h-4" /> Capacidade de Pets
+                </Link>
                 <Link href="/perfil" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-transparent hover:bg-white/5 text-gray-400 hover:text-white font-medium text-sm transition-colors">
                   <User className="w-4 h-4" /> Meu Perfil
                 </Link>
