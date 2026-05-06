@@ -57,6 +57,7 @@ export class UsersService {
     location?: string;
     maxPrice?: number;
     sortBy?: string;
+    name?: string;
   }): Promise<UserDocument[]> {
     const query: any = { 
       role: 'caregiver', 
@@ -70,6 +71,10 @@ export class UsersService {
 
     if (filters.location) {
       query.location = { $regex: filters.location, $options: 'i' };
+    }
+
+    if (filters.name) {
+      query.name = { $regex: filters.name, $options: 'i' };
     }
 
     if (filters.maxPrice) {

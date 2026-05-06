@@ -31,12 +31,14 @@ export class UsersController {
     @Query('location') location?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('sortBy') sortBy?: string,
+    @Query('name') name?: string,
   ) {
     return this.usersService.findCaregivers({
       type,
       location,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       sortBy,
+      name,
     });
   }
 

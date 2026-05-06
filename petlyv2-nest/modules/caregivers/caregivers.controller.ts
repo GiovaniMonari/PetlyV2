@@ -31,6 +31,7 @@ export class CaregiversController {
     @Query('maxPrice') maxPrice?: string,
     @Query('sortBy') sortBy?: string,
     @Query('specialty') specialty?: string,
+    @Query('name') name?: string,
   ) {
     return this.caregiversService.findFiltered({
       type,
@@ -38,6 +39,7 @@ export class CaregiversController {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       sortBy,
       specialty,
+      name,
     });
   }
 

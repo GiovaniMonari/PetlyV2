@@ -5,20 +5,24 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Heart, Shield, Zap, CalendarCheck, MessageSquareHeart, CreditCard, MapPin, Loader2 } from 'lucide-react';
 import { searchLocation } from '@/utils/location';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch?: (val: string) => void; onBecomeCaregiverClick?: () => void }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
+  const debouncedQuery = useDebounce(query, 500);
+  const isDebouncing = query !== debouncedQuery && query.length >= 3;
+  const showLoading = loading || isDebouncing;
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (query.length >= 3) {
+      if (debouncedQuery.length >= 3) {
         setLoading(true);
-        const results = await searchLocation(query);
+        const results = await searchLocation(debouncedQuery);
         setSuggestions(results);
         setLoading(false);
       } else {
@@ -26,9 +30,8 @@ const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch?: (val: string) =
       }
     };
 
-    const debounceTimer = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [query]);
+    fetchSuggestions();
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -99,7 +102,7 @@ const Hero = ({ onSearch, onBecomeCaregiverClick }: { onSearch?: (val: string) =
               {/* Dropdown de sugestões */}
               {showSuggestions && (query.length >= 3) && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-white/20 rounded-xl shadow-2xl overflow-hidden z-50">
-                  {loading ? (
+                  {showLoading ? (
                     <div className="p-4 flex items-center justify-center text-gray-400">
                       <Loader2 className="w-5 h-5 animate-spin mr-2" />
                       Buscando...

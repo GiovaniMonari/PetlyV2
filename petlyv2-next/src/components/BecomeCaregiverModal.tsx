@@ -3,6 +3,7 @@
 import { X, CheckCircle, Mail, MapPin, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { searchLocation } from '@/utils/location';
+import { useDebounce } from '@/hooks/useDebounce';
 import { apiRegister } from '@/utils/api';
 import { useRouter } from 'next/navigation';
 
@@ -38,6 +39,9 @@ const BecomeCaregiverModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const router = useRouter();
+  const debouncedLocation = useDebounce(formData.location, 500);
+  const isDebouncing = formData.location !== debouncedLocation && formData.location.length > 2;
+  const showLoading = isSearching || isDebouncing;
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -54,19 +58,19 @@ const BecomeCaregiverModal = ({
 
   // Debounce API location search
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (formData.location.length > 2 && showSuggestions) {
+    const fetchSuggestions = async () => {
+      if (debouncedLocation.length > 2 && showSuggestions) {
         setIsSearching(true);
-        const results = await searchLocation(formData.location);
+        const results = await searchLocation(debouncedLocation);
         setSuggestions(results);
         setIsSearching(false);
       } else {
         setSuggestions([]);
       }
-    }, 500);
+    };
 
-    return () => clearTimeout(timer);
-  }, [formData.location, showSuggestions]);
+    fetchSuggestions();
+  }, [debouncedLocation, showSuggestions]);
 
   if (!isOpen) return null;
 
@@ -355,7 +359,7 @@ const BecomeCaregiverModal = ({
                     {/* Autocomplete Dropdown */}
                     {showSuggestions && (suggestions.length > 0 || isSearching) && (
                       <div className="absolute z-50 w-full mt-1 bg-[#252525] border border-white/10 rounded-lg shadow-lg overflow-hidden">
-                        {isSearching ? (
+                        {showLoading ? (
                           <div className="px-4 py-3 text-sm text-gray-400">Buscando...</div>
                         ) : (
                           suggestions.map((sug, idx) => (

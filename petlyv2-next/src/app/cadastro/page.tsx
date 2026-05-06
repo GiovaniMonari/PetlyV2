@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PawPrint, Mail, Lock, User, MapPin, Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react';
 import { searchLocation } from '@/utils/location';
+import { useDebounce } from '@/hooks/useDebounce';
 import { apiRegister } from '@/utils/api';
 
 export default function CadastroPage() {
@@ -38,6 +39,9 @@ export default function CadastroPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const router = useRouter();
+  const debouncedLocation = useDebounce(formData.location, 500);
+  const isDebouncing = formData.location !== debouncedLocation && formData.location.length > 2;
+  const showLoading = isSearching || isDebouncing;
 
   // Color variables depending on account type
   const primaryColor = accountType === 'tutor' ? 'text-[#06A77D]' : 'text-[#FF6B35]';
@@ -47,19 +51,19 @@ export default function CadastroPage() {
   const primaryBorder = accountType === 'tutor' ? 'focus:border-[#06A77D]/50' : 'focus:border-[#FF6B35]/50';
 
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (formData.location.length > 2 && showSuggestions && accountType === 'cuidador') {
+    const fetchSuggestions = async () => {
+      if (debouncedLocation.length > 2 && showSuggestions && accountType === 'cuidador') {
         setIsSearching(true);
-        const results = await searchLocation(formData.location);
+        const results = await searchLocation(debouncedLocation);
         setSuggestions(results);
         setIsSearching(false);
       } else {
         setSuggestions([]);
       }
-    }, 500);
+    };
 
-    return () => clearTimeout(timer);
-  }, [formData.location, showSuggestions, accountType]);
+    fetchSuggestions();
+  }, [debouncedLocation, showSuggestions, accountType]);
 
   const maskCPF = (value: string) => {
     return value
@@ -340,7 +344,7 @@ export default function CadastroPage() {
                   {/* Autocomplete Dropdown */}
                   {showSuggestions && (suggestions.length > 0 || isSearching) && (
                     <div className="absolute z-50 w-full mt-2 bg-[#1f1f1f] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
-                      {isSearching ? (
+                      {showLoading ? (
                         <div className="px-4 py-3 text-sm text-gray-400">Buscando...</div>
                       ) : (
                         suggestions.map((sug, idx) => (

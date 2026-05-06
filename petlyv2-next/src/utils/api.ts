@@ -181,12 +181,14 @@ export async function apiUpdateProfile(id: string, payload: any): Promise<any> {
 export async function apiGetCaregivers(filters?: {
   type?: string;
   location?: string;
+  name?: string;
   maxPrice?: number;
   sortBy?: string;
 }): Promise<any[]> {
   const params = new URLSearchParams();
   if (filters?.type && filters.type !== 'all') params.set('type', filters.type);
   if (filters?.location) params.set('location', filters.location);
+  if (filters?.name) params.set('name', filters.name);
   if (filters?.maxPrice) params.set('maxPrice', String(filters.maxPrice));
   if (filters?.sortBy) params.set('sortBy', filters.sortBy);
 

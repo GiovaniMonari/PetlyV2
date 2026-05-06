@@ -18,7 +18,9 @@ import {
   X,
   ChevronDown,
   Rat,
+  User,
 } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 import router from 'next/router';
 
 const PET_TYPES = [
@@ -42,15 +44,14 @@ function CuidadoresPageContent() {
 
   const [selectedType, setSelectedType] = useState('all');
   const [locationFilter, setLocationFilter] = useState(initialLocation);
+  const [nameFilter, setNameFilter] = useState('');
   const [sortBy, setSortBy] = useState('relevance');
 
-  useEffect(() => {
-    const loc = searchParams.get('location');
-    if (loc !== null) {
-      setLocationFilter(loc);
-    }
-  }, [searchParams]);
+  const debouncedLocation = useDebounce(locationFilter, 500);
+  const debouncedName = useDebounce(nameFilter, 500);
   const [priceMax, setPriceMax] = useState(200);
+  const debouncedPrice = useDebounce(priceMax, 300);
+
   const [showFilters, setShowFilters] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -73,8 +74,9 @@ function CuidadoresPageContent() {
       try {
         const data = await apiGetCaregivers({
           type: selectedType,
-          location: locationFilter,
-          maxPrice: priceMax,
+          location: debouncedLocation,
+          name: debouncedName,
+          maxPrice: debouncedPrice,
           sortBy,
         });
         if (active) {
@@ -88,14 +90,22 @@ function CuidadoresPageContent() {
     };
     fetchCaregivers();
     return () => { active = false; };
-  }, [selectedType, locationFilter, sortBy, priceMax]);
+  }, [selectedType, debouncedLocation, debouncedName, sortBy, debouncedPrice]);
+
+  const isDebouncing = 
+    locationFilter !== debouncedLocation || 
+    nameFilter !== debouncedName || 
+    priceMax !== debouncedPrice;
+
+  const showLoading = isLoading || isDebouncing;
 
   const hasActiveFilters =
-    selectedType !== 'all' || locationFilter !== '' || priceMax < 200;
+    selectedType !== 'all' || locationFilter !== '' || nameFilter !== '' || priceMax < 200;
 
   const clearFilters = () => {
     setSelectedType('all');
     setLocationFilter('');
+    setNameFilter('');
     setPriceMax(200);
   };
 
@@ -118,7 +128,7 @@ function CuidadoresPageContent() {
                 Encontre seu cuidador
               </h1>
               <p className="text-lg text-gray-400">
-                {isLoading ? 'Buscando cuidadores...' : `${dbCaregivers.length} profissional${dbCaregivers.length !== 1 ? 'ais' : ''} disponível${dbCaregivers.length !== 1 ? 'eis' : ''}`}
+                {showLoading ? 'Buscando cuidadores...' : `${dbCaregivers.length} profissional${dbCaregivers.length !== 1 ? 'ais' : ''} disponível${dbCaregivers.length !== 1 ? 'eis' : ''}`}
               </p>
             </div>
 
@@ -130,12 +140,31 @@ function CuidadoresPageContent() {
                   type="text"
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
-                  placeholder="Buscar por cidade..."
+                  placeholder="Cidade (Ex: São Paulo)"
                   className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
                 />
                 {locationFilter && (
                   <button
                     onClick={() => setLocationFilter('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                  >
+                    <X className="w-4 h-4 text-gray-400 hover:text-white" />
+                  </button>
+                )}
+              </div>
+
+              <div className="relative flex-1 max-w-md">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={nameFilter}
+                  onChange={(e) => setNameFilter(e.target.value)}
+                  placeholder="Nome do cuidador..."
+                  className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
+                />
+                {nameFilter && (
+                  <button
+                    onClick={() => setNameFilter('')}
                     className="absolute right-3 top-1/2 -translate-y-1/2"
                   >
                     <X className="w-4 h-4 text-gray-400 hover:text-white" />
@@ -240,7 +269,7 @@ function CuidadoresPageContent() {
 
         {/* Cards grid */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          {isLoading ? (
+          {showLoading ? (
             <div className="py-20 flex justify-center">
               <div className="w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin"></div>
             </div>

@@ -110,6 +110,7 @@ export class CaregiversService {
     maxPrice?: number;
     sortBy?: string;
     specialty?: string;
+    name?: string;
   }): Promise<CaregiverDocument[]> {
     const query: any = { isActive: { $ne: false } };
 
@@ -128,6 +129,10 @@ export class CaregiversService {
 
     if (filters.specialty) {
       query.specialties = { $regex: filters.specialty, $options: 'i' };
+    }
+
+    if (filters.name) {
+      query.name = { $regex: filters.name, $options: 'i' };
     }
 
     let sortOption: any = {};
