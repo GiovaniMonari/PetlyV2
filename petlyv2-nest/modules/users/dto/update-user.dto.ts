@@ -2,6 +2,7 @@ import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { CreateUserDto } from './create-user.dto';
+import { PetSize, PetType } from '@modules/user-pets/schemas/pets.schema';
 
 class ServiceItemDto {
   @IsOptional()
@@ -43,6 +45,31 @@ class PetsQuantityItemDto {
   quantity!: number;
 }
 
+class MyPetsItemDto {
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
+  @IsString()
+  name!: string;
+
+  @IsEnum(PetType)
+  type!: PetType;
+
+  @IsEnum(PetSize)
+  size!: PetSize;
+
+  @IsNumber()
+  age!: number;
+
+  @IsString()
+  breed!: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
 export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
   @IsArray()
@@ -55,6 +82,12 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @ValidateNested({ each: true })
   @Type(() => PetsQuantityItemDto)
   petQuantities?: PetsQuantityItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MyPetsItemDto)
+  myPets?: MyPetsItemDto[];
 
   @IsOptional()
   @IsArray()

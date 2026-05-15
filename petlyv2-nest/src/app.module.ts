@@ -1,10 +1,11 @@
+import { AuthModule } from '@modules/auth/auth.module';
+import { BookingsModule } from '@modules/bookings/bookings.module';
+import { CaregiversModule } from '@modules/caregivers/caregivers.module';
+import { UserPetsModule } from '@modules/user-pets/user-pets.module';
+import { UsersModule } from '@modules/users/users.module';
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { AuthModule } from '../modules/auth/auth.module';
-import { UsersModule } from '../modules/users/users.module';
-import { CaregiversModule } from '../modules/caregivers/caregivers.module';
-import { BookingsModule } from '../modules/bookings/bookings.module';
 
 @Module({
   imports: [
@@ -12,13 +13,18 @@ import { BookingsModule } from '../modules/bookings/bookings.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    MongooseModule.forRoot(
-      process.env.MONGODB_URI || 'mongodb://localhost:27017/petlyv2',
-    ),
+
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGODB_URI'),
+      }),
+    }),
     AuthModule,
     UsersModule,
     CaregiversModule,
     BookingsModule,
+    UserPetsModule,
   ],
 })
 export class AppModule {}

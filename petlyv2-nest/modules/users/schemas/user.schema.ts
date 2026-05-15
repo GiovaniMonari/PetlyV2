@@ -1,7 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ServiceType } from '../../caregivers/dto/service-dto';
-import { PetsQuantityDto } from '../../caregivers/dto/pets-quantity.dto';
 
 export type UserDocument = User & Document;
 
@@ -46,7 +45,10 @@ export class User {
   @Prop({ type: [{ type: { type: String }, quantity: Number }], default: [] })
   petsQuantity?: { type: string; quantity: number }[];
 
-  @Prop({ default: 0 })
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Pet' }], default: [] })
+  pets?: Types.ObjectId[];
+
+  @Prop({default: 0 })
   price?: number;
 
   @Prop({ default: 0 })

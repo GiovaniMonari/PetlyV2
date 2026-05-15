@@ -6,6 +6,7 @@ import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { Pet, PetDocument } from '@modules/user-pets/schemas/pets.schema';
 
 @Injectable()
 export class UsersService {
@@ -13,6 +14,8 @@ export class UsersService {
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
     private cloudinaryService: CloudinaryService,
+    @InjectModel(Pet.name)
+    private petModel: Model<PetDocument>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
@@ -276,4 +279,49 @@ export class UsersService {
 
     return caregivers;
   }
+
+
+  
+  async getOwnerPets(userId: string): Promise<PetDocument[]> {
+    const user = await this.findById(userId);
+
+    const pets = await this.petModel
+      .find({ _id: { $in: user.pets } })
+      .select('-password -cpf')
+      .exec();
+
+    return pets;
+  }
+
+  async addPet(
+    userId: string,
+    petId: Types.ObjectId,
+  ): Promise<UserDocument> {
+    const user = await this.findById(userId);
+    const pet = await this.petModel.findById(petId);
+
+    if (!pet) {
+      throw new NotFoundException('Pet não encontrado');
+    }
+    if (!user.pets.includes(petId)) {
+      user.pets.push(petId);
+      await user.save();
+    }
+
+    return user;
+  }
+
+  async removePet(
+    userId: string,
+    petId: string,
+  ): Promise<UserDocument> {
+    const user = await this.findById(userId);
+
+    user.pets = user.pets.filter(
+      (id) => id.toString() !== petId,
+    );
+
+    await user.save();
+    return user;
+  } 
 }

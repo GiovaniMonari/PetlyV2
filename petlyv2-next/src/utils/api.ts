@@ -235,6 +235,65 @@ export async function apiGetCaregiverPetsQuantities(): Promise<CaregiverPetsQuan
   return request('/caregivers/pets-quantities');
 }
 
+// utils/api.ts - Atualize estas funções
+
+// utils/api.ts - Funções atualizadas para o DTO correto
+
+export async function apiCreatePet(pet: {
+  name: string;
+  avatar?: string;
+  type: 'dog' | 'cat' | 'bird' | 'other';
+  size: 'small' | 'medium' | 'large';
+  age: number;
+  breed: string;
+  notes?: string;
+}): Promise<any> {
+  return request('/user/pets', {
+    method: 'POST',
+    body: JSON.stringify(pet),
+  });
+}
+
+export async function apiUpdatePet(petId: string, pet: Partial<{
+  userId?: string;
+  name: string;
+  avatar?: string;
+  type: 'dog' | 'cat' | 'bird' | 'other';
+  size: 'small' | 'medium' | 'large';
+  age: number;
+  breed: string;
+  notes?: string;
+}>): Promise<any> {
+  return request(`/user/pets/${petId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(pet),
+  });
+}
+
+export async function apiUploadPetAvatar(petId: string, file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return request(`/user/pets/${petId}/avatar`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function apiDeletePet(petId: string): Promise<any> {
+  return request(`/user/pets/${petId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function apiGetMyPets(): Promise<any> {
+  return request('/user/pets/my-pets');
+}
+
+export async function apiGetPet(petId: string): Promise<any> {
+  return request(`/user/pets/${petId}`);
+}
+
 export async function apiUpdateAvailability(id: string, availability: any): Promise<any> {
   return request(`/caregivers/${id}/availability`, {
     method: 'PATCH',

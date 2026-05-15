@@ -25,6 +25,7 @@ import {
   apiCreateBooking,
   apiGetCaregiver,
   apiGetMyBookings,
+  apiGetMyPets,
   apiSubmitBookingReview,
   getUser,
   isAuthenticated,
@@ -98,6 +99,7 @@ export default function CaregiverDetailPage() {
   const caregiverId = params.id as string;
 
   const [caregiver, setCaregiver] = useState<CaregiverProfile | null>(null);
+  const [myPets, setMyPets] = useState<any[]>([]);
   const [myBookings, setMyBookings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState('');
@@ -105,7 +107,7 @@ export default function CaregiverDetailPage() {
   const [selectedService, setSelectedService] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedPetType, setSelectedPetType] = useState('dog');
+  const [selectedPetType, setSelectedPetType] = useState<string | null>(null);
   const [petsCount, setPetsCount] = useState(1);
   const [notes, setNotes] = useState('');
   const [isBooking, setIsBooking] = useState(false);
@@ -210,6 +212,7 @@ export default function CaregiverDetailPage() {
   };
 
   const currentUser = getUser();
+  const userPets = apiGetMyPets();
   const isTutor = currentUser?.role === 'tutor';
   const isOwnProfile = normalizeId(currentUser?.id) === caregiverId;
 
@@ -406,6 +409,19 @@ export default function CaregiverDetailPage() {
     }
   };
 
+  const fetchMyPets = async () => {
+    if (!isAuthenticated()) {
+      setMyPets([]);
+      return;
+    }
+    try {
+      const pets = await apiGetMyPets();
+      setMyPets(Array.isArray(pets) ? pets : []);
+    } catch {
+      setMyPets([]);
+    }    
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -414,7 +430,7 @@ export default function CaregiverDetailPage() {
       setPageError('');
 
       try {
-        const [caregiverData] = await Promise.all([apiGetCaregiver(caregiverId), fetchMyBookings()]);
+        const [caregiverData] = await Promise.all([apiGetCaregiver(caregiverId), fetchMyBookings(), fetchMyPets()]);
 
         if (!isMounted) return;
 
@@ -648,21 +664,63 @@ export default function CaregiverDetailPage() {
                 {caregiver.bio || 'Este cuidador ainda não adicionou uma biografia.'}
               </p>
 
-              <div className="mt-6 space-y-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">Pets atendidos</p>
-                  <div className="flex flex-wrap gap-2">
-                    {petTypeLabels.map((label) => (
-                      <span
-                        key={label}
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 text-gray-200 border border-white/10"
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div className='h-1 w-full bg-white/10 mt-6'></div>
 
+              <div className='mt-6'>
+                <h2 className="text-xl font-bold text-white mb-1">Serviços e preços</h2>
+                <p className="text-xs text-gray-400 mb-6">
+                  Valores definidos pelo cuidador e usados no cálculo estimado da reserva.
+                </p>
+
+                <div className='flex flex-col gap-4'>
+                  {services.map((service) => (
+                    <article
+                      key={service.name}
+                      className='flex gap-4 items-center justify-between border-b border-white/10 pb-2 last:border-b-0 '
+                    >
+                      <div>
+                        <p className="text-xs font-bold text-white">{service.name}</p>
+                        <p className="text-[10px] text-gray-400 mt-2">{service.duration}</p>
+                      </div>
+                      <p className="text-[#FF6B35] text-lg font-bold mt-1">{formatCurrency(service.price)}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className='h-1 w-full bg-white/10 mt-6'></div> 
+
+              <div className='mt-6'>
+                <h2 className="text-xl font-bold text-white mb-1">Pets aceitos</h2>
+                <p className="text-xs text-gray-400 mb-6">
+                  Tipos de animais e quantidade máxima que o cuidador aceita por reserva.
+                </p>
+
+                <div className="flex flex-wrap gap-4">
+                  {caregiver.petsQuantity && caregiver.petsQuantity.length > 0 ? (
+                    caregiver.petsQuantity.map((p) => (
+                      <div key={p.type} className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl p-4 min-w-[140px]">
+                        <div className="w-10 h-10 rounded-full bg-[#FF6B35]/10 flex items-center justify-center">
+                          <PawPrint className="w-5 h-5 text-[#FF6B35]" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-white uppercase tracking-wider">{PET_TYPE_LABELS[p.type] || p.type}</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Até {p.quantity} {p.quantity === 1 ? 'pet' : 'pets'}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    petTypeLabels.map((label) => (
+                      <div key={label} className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl p-4">
+                        <PawPrint className="w-5 h-5 text-[#FF6B35]" />
+                        <span className="text-xs font-bold text-white">{label}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">Disponibilidade</p>
                   <div className="flex flex-wrap gap-2">
@@ -697,57 +755,6 @@ export default function CaregiverDetailPage() {
           </section>
 
           <section className="lg:col-span-2 space-y-6">
-            {/* Serviços e Preços (Informativo) */}
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
-              <h2 className="text-xl font-bold text-white mb-1">Serviços e preços</h2>
-              <p className="text-xs text-gray-400 mb-6">
-                Valores definidos pelo cuidador e usados no cálculo estimado da reserva.
-              </p>
-
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {services.map((service) => (
-                  <article
-                    key={service.name}
-                    className="rounded-2xl border border-white/10 bg-black/30 p-4 hover:border-[#FF6B35]/40 transition-colors"
-                  >
-                    <p className="text-xs font-bold text-white">{service.name}</p>
-                    <p className="text-[#FF6B35] text-lg font-bold mt-1">{formatCurrency(service.price)}</p>
-                    <p className="text-[10px] text-gray-400 mt-2">{service.duration}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            {/* Pets Aceitos (Informativo) */}
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
-              <h2 className="text-xl font-bold text-white mb-1">Pets aceitos</h2>
-              <p className="text-xs text-gray-400 mb-6">
-                Tipos de animais e quantidade máxima que o cuidador aceita por reserva.
-              </p>
-
-              <div className="flex flex-wrap gap-4">
-                {caregiver.petsQuantity && caregiver.petsQuantity.length > 0 ? (
-                  caregiver.petsQuantity.map((p) => (
-                    <div key={p.type} className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl p-4 min-w-[140px]">
-                      <div className="w-10 h-10 rounded-full bg-[#FF6B35]/10 flex items-center justify-center">
-                        <PawPrint className="w-5 h-5 text-[#FF6B35]" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white uppercase tracking-wider">{PET_TYPE_LABELS[p.type] || p.type}</p>
-                        <p className="text-[10px] text-gray-400 font-medium">Até {p.quantity} {p.quantity === 1 ? 'pet' : 'pets'}</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                   petTypeLabels.map((label) => (
-                     <div key={label} className="flex items-center gap-3 bg-black/30 border border-white/10 rounded-2xl p-4">
-                       <PawPrint className="w-5 h-5 text-[#FF6B35]" />
-                       <span className="text-xs font-bold text-white">{label}</span>
-                     </div>
-                   ))
-                )}
-              </div>
-            </div>
 
             {/* Nova reserva form */}
             <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
@@ -778,46 +785,28 @@ export default function CaregiverDetailPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-white mb-2">Tipo de pet</label>
+                <label className="block text-sm font-semibold text-white mb-2">Pet</label>
+                
                 <select
-                  value={selectedPetType}
-                  onChange={(event) => {
-                    setSelectedPetType(event.target.value);
-                    setPetsCount(1);
-                  }}
+                  value={selectedPetType || ''}
+                  onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
+                    const value = event.target.value;
+                    setSelectedPetType(value || null);
+                    setPetsCount(value ? 1 : 0);               
+                   }}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
                 >
-                  {caregiver.petsQuantity && caregiver.petsQuantity.length > 0 ? (
-                    caregiver.petsQuantity.map((p) => (
-                      <option key={p.type} value={p.type} className="bg-[#111]">
-                        {PET_TYPE_LABELS[p.type] || p.type}
-                      </option>
+                  <option value="" className="bg-[#111]">Selecione seu pet</option>
+                  {myPets?.length > 0 ? (
+                    myPets.map((pet) => (
+                      <option key={pet._id} value={pet._id} className="bg-[#111]">
+                        {pet.name}
+                      </option> 
                     ))
                   ) : (
-                    <option value="" className="bg-[#111]">Nenhum pet aceito</option>
+                    <option value="" className="bg-[#111]">Nenhum pet cadastrado</option>
                   )}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-white mb-2">
-                  Quantidade
-                  <span className="ml-1 text-[10px] text-gray-500 font-normal">
-                    (Max: {caregiver.petsQuantity?.find(p => p.type === selectedPetType)?.quantity || 1})
-                  </span>
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={caregiver.petsQuantity?.find(p => p.type === selectedPetType)?.quantity || 1}
-                  value={petsCount}
-                  onChange={(event) => {
-                    const max = caregiver.petsQuantity?.find(p => p.type === selectedPetType)?.quantity || 1;
-                    const val = Math.min(max, Math.max(1, Number(event.target.value) || 1));
-                    setPetsCount(val);
-                  }}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50"
-                />
               </div>
             </div>
 

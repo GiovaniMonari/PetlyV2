@@ -76,6 +76,20 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
               </Link>
             )}
 
+            {isTutor && (
+              <Link
+                href="/my-pets"
+                className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  pathname === '/my-pets'
+                    ? 'text-[#FF6B35]'
+                    : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                <PawPrint className={`w-4 h-4 ${pathname === '/my-pets' ? 'fill-[#FF6B35]' : ''}`} />
+                Meus Pets
+              </Link>
+            )}
+
             {user ? (
               <div className="flex items-center gap-4">
                 <Link href="/perfil" className="flex items-center gap-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 px-3 py-1.5 rounded-lg transition-colors">
