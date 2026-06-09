@@ -29,15 +29,15 @@ export class User {
   @Prop({ required: true })
   password!: string;
 
+  @Prop()
+  location?: string;
+
   @Prop({ enum: UserRole, required: true, default: UserRole.TUTOR })
   role!: UserRole;
 
   // Caregiver-specific fields (populated when role === 'caregiver')
   @Prop()
   cpf?: string;
-
-  @Prop()
-  location?: string;
 
   @Prop({ type: [String], default: [] })
   specialties?: string[];

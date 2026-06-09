@@ -3,30 +3,49 @@
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
-import FilterBar from '@/components/FilterBar';
 import CaregiverCard from '@/components/CaregiverCard';
 import Footer from '@/components/Footer';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
-import { apiGetCaregivers, getUser } from '@/utils/api';
+import { apiGetCaregivers, apiGetProfile, getUser } from '@/utils/api';
 import FilterCards from '@/components/FilterBar';
 import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
   const router = useRouter();
   const [selectedType, setSelectedType] = useState('all');
-  const [locationFilter, setLocationFilter] = useState('');
+  const [searchMode, setSearchMode] = useState<'all' | 'near'>('all');
+  const [nearLocation, setNearLocation] = useState('');
+  const [userLocation, setUserLocation] = useState('');
   const [isBecomeCaregiverModalOpen, setIsBecomeCaregiverModalOpen] = useState(false);
 
   const [dbCaregivers, setDbCaregivers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Redirect caregivers to profile
+  const effectiveLocation = searchMode === 'near' ? (nearLocation || userLocation) : '';
+
+  // Redirect caregivers to profile and optionally prefill location for tutors
   useEffect(() => {
     const user = getUser();
     if (user && user.role === 'caregiver') {
       router.push('/dashboard');
+      return;
     }
-  }, [router]);
+
+    if (user?.role === 'tutor') {
+      apiGetProfile()
+        .then((profile) => {
+          if (profile?.location) {
+            setUserLocation(profile.location);
+            if (searchMode === 'near' && !nearLocation) {
+              setNearLocation(profile.location);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('Erro ao buscar perfil do usuário:', err);
+        });
+    }
+  }, [nearLocation, searchMode, router]);
 
   // Fetch from backend whenever filters change
   useEffect(() => {
@@ -36,7 +55,7 @@ export default function HomePage() {
       try {
         const data = await apiGetCaregivers({
           type: selectedType,
-          location: locationFilter,
+          location: effectiveLocation,
         });
         if (active) {
           setDbCaregivers(data || []);
@@ -49,7 +68,7 @@ export default function HomePage() {
     };
     fetchCaregivers();
     return () => { active = false; };
-  }, [selectedType, locationFilter]);
+  }, [selectedType, effectiveLocation]);
 
   return (
     <>
@@ -60,7 +79,10 @@ export default function HomePage() {
 
       <main>
         <Hero 
-          onSearch={setLocationFilter}
+          onSearch={(value) => {
+            setSearchMode('near');
+            setNearLocation(value);
+          }}
           onBecomeCaregiverClick={() => setIsBecomeCaregiverModalOpen(true)}
         />
 
@@ -81,6 +103,50 @@ export default function HomePage() {
 
         {/* Caregivers Section - Main Content */}
         <div id="caregivers-section">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 md:mt-8">
+
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-1 h-5 bg-[#A23B72] rounded-full shadow-[0_0_8px_rgba(162,59,114,0.8)]"></div>
+              <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Filtrar cuidadores por localização</p>
+            </div>
+
+            <div className="flex flex-col items-center text-center gap-8">
+              {/* Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full sm:w-auto justify-center">
+                <button
+                  type="button"
+                  onClick={() => setSearchMode('all')}
+                  className={`px-8 sm:px-10 py-4 sm:py-5 rounded-xl text-base sm:text-lg font-semibold transition transform hover:scale-105 active:scale-95 ${searchMode === 'all' ? 'bg-[#FF6B35] text-white shadow-lg shadow-[#FF6B35]/40' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                >
+                  Gerais
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchMode('near');
+                    if (!nearLocation && userLocation) {
+                      setNearLocation(userLocation);
+                    }
+                  }}
+                  className={`px-8 sm:px-10 py-4 sm:py-5 rounded-xl text-base sm:text-lg font-semibold transition transform hover:scale-105 active:scale-95 ${searchMode === 'near' ? 'bg-[#06A77D] text-white shadow-lg shadow-[#06A77D]/40' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                >
+                  Perto de mim
+                </button>
+              </div>
+
+              {/* Info Text */}
+              {searchMode === 'near' && (
+                <p className="text-sm sm:text-base text-gray-400 max-w-md">
+                  {effectiveLocation
+                    ? `Filtrando por ${effectiveLocation}`
+                    : userLocation
+                      ? `Sua cidade é ${userLocation}. Digite um local na busca para trocar.`
+                      : 'Faça login e informe sua localização no perfil para buscar cuidadores perto de você.'}
+                </p>
+              )}
+            </div>
+          </div>
+
           <FilterCards
             selectedType={selectedType}
             onTypeChange={setSelectedType}
@@ -94,10 +160,14 @@ export default function HomePage() {
                   <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Profissionais</span>
                 </div>
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-2">
-                  Cuidadores disponíveis
+                  {effectiveLocation ? 'Cuidadores perto de você' : 'Cuidadores gerais'}
                 </h2>
                 <p className="text-lg text-gray-400 font-medium">
-                  {isLoading ? 'Buscando cuidadores...' : `${dbCaregivers.length} profissional${dbCaregivers.length !== 1 ? 'ais' : ''} encontrado${dbCaregivers.length !== 1 ? 's' : ''}`}
+                  {isLoading
+                    ? 'Buscando cuidadores...'
+                    : dbCaregivers.length === 1
+                      ? `1 profissional encontrado${effectiveLocation ? ` em ${effectiveLocation}` : ''}`
+                      : `${dbCaregivers.length} profissionais encontrados${effectiveLocation ? ` em ${effectiveLocation}` : ''}`}
                 </p>
               </div>
 
@@ -117,7 +187,7 @@ export default function HomePage() {
                 <div className="py-20 text-center bg-white/5 rounded-3xl border border-white/10 backdrop-blur-sm">
                   <p className="text-gray-400 font-medium mb-6 text-lg">Nenhum cuidador com esses filtros</p>
                   <button
-                    onClick={() => { setSelectedType('all'); setLocationFilter(''); }}
+                    onClick={() => { setSelectedType('all'); setSearchMode('all'); setNearLocation(''); }}
                     className="px-6 py-3 bg-[#FF6B35] text-white font-semibold rounded-lg hover:bg-[#E55A2B] active:scale-95 transition-all shadow-md"
                   >
                     Limpar filtros

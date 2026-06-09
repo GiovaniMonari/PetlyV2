@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CaregiverCard from '@/components/CaregiverCard';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
-import { apiGetCaregivers, getUser } from '@/utils/api';
+import { apiGetCaregivers, apiGetProfile, getUser } from '@/utils/api';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Search,
@@ -21,7 +21,6 @@ import {
   User,
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
-import router from 'next/router';
 
 const PET_TYPES = [
   { id: 'all', label: 'Todos', icon: MoreHorizontal },
@@ -40,14 +39,17 @@ const SORT_OPTIONS = [
 
 function CuidadoresPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialLocation = searchParams.get('location') || '';
 
   const [selectedType, setSelectedType] = useState('all');
-  const [locationFilter, setLocationFilter] = useState(initialLocation);
+  const [searchMode, setSearchMode] = useState<'all' | 'near'>(initialLocation ? 'near' : 'all');
+  const [nearLocation, setNearLocation] = useState(initialLocation);
+  const [userLocation, setUserLocation] = useState('');
   const [nameFilter, setNameFilter] = useState('');
   const [sortBy, setSortBy] = useState('relevance');
 
-  const debouncedLocation = useDebounce(locationFilter, 500);
+  const debouncedLocation = useDebounce(nearLocation, 500);
   const debouncedName = useDebounce(nameFilter, 500);
   const [priceMax, setPriceMax] = useState(200);
   const debouncedPrice = useDebounce(priceMax, 300);
@@ -58,13 +60,35 @@ function CuidadoresPageContent() {
   const [dbCaregivers, setDbCaregivers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const effectiveLocation = searchMode === 'near'
+    ? nearLocation
+      ? debouncedLocation
+      : userLocation
+    : '';
+
   // Redirect caregivers to profile
   useEffect(() => {
-    const user = getUser();
-    if (user && user.role === 'caregiver') {
+    const storedUser = getUser();
+    if (storedUser && storedUser.role === 'caregiver') {
       router.push('/dashboard');
+      return;
     }
-  }, [router]);
+
+    if (storedUser?.role === 'tutor') {
+      apiGetProfile()
+        .then((profile) => {
+          if (profile?.location) {
+            setUserLocation(profile.location);
+            if (searchMode === 'near' && !nearLocation) {
+              setNearLocation(profile.location);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('Erro ao buscar perfil do usuário:', err);
+        });
+    }
+  }, [nearLocation, searchMode, router]);
 
   // Fetch from backend whenever filters change
   useEffect(() => {
@@ -74,7 +98,7 @@ function CuidadoresPageContent() {
       try {
         const data = await apiGetCaregivers({
           type: selectedType,
-          location: debouncedLocation,
+          location: effectiveLocation,
           name: debouncedName,
           maxPrice: debouncedPrice,
           sortBy,
@@ -90,21 +114,23 @@ function CuidadoresPageContent() {
     };
     fetchCaregivers();
     return () => { active = false; };
-  }, [selectedType, debouncedLocation, debouncedName, sortBy, debouncedPrice]);
+  }, [selectedType, effectiveLocation, debouncedName, sortBy, debouncedPrice]);
 
   const isDebouncing = 
-    locationFilter !== debouncedLocation || 
+    nearLocation !== debouncedLocation || 
     nameFilter !== debouncedName || 
     priceMax !== debouncedPrice;
 
   const showLoading = isLoading || isDebouncing;
+  const activeLocation = effectiveLocation;
 
   const hasActiveFilters =
-    selectedType !== 'all' || locationFilter !== '' || nameFilter !== '' || priceMax < 200;
+    selectedType !== 'all' || searchMode === 'near' || nameFilter !== '' || priceMax < 200;
 
   const clearFilters = () => {
     setSelectedType('all');
-    setLocationFilter('');
+    setSearchMode('all');
+    setNearLocation('');
     setNameFilter('');
     setPriceMax(200);
   };
@@ -123,35 +149,72 @@ function CuidadoresPageContent() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#2E86AB]/10 blur-[100px] rounded-full pointer-events-none"></div>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
-            <div className="mb-8">
+            <div className="mb-10">
+              <div className="flex flex-wrap gap-3 items-center mb-6">
+                <span className="text-sm font-medium text-gray-400">Mostrar:</span>
+                <button
+                  type="button"
+                  onClick={() => setSearchMode('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition ${searchMode === 'all' ? 'bg-[#FF6B35] text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                >
+                  Gerais
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchMode('near');
+                    if (!nearLocation && userLocation) {
+                      setNearLocation(userLocation);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition ${searchMode === 'near' ? 'bg-[#06A77D] text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                >
+                  Perto de mim
+                </button>
+                {searchMode === 'near' && (
+                  <span className="text-sm text-gray-400">
+                    {effectiveLocation
+                      ? `Filtrando por ${effectiveLocation}`
+                      : userLocation
+                        ? `Sua cidade é ${userLocation}`
+                        : 'Faça login e informe sua localização no perfil para buscar perto de você.'}
+                  </span>
+                )}
+              </div>
               <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
-                Encontre seu cuidador
+                {activeLocation ? 'Cuidadores perto de você' : 'Cuidadores gerais'}
               </h1>
               <p className="text-lg text-gray-400">
-                {showLoading ? 'Buscando cuidadores...' : `${dbCaregivers.length} profissional${dbCaregivers.length !== 1 ? 'ais' : ''} disponível${dbCaregivers.length !== 1 ? 'eis' : ''}`}
+                {showLoading
+                  ? 'Buscando cuidadores...'
+                  : dbCaregivers.length === 1
+                    ? `1 profissional disponível${activeLocation ? ` em ${activeLocation}` : ''}`
+                    : `${dbCaregivers.length} profissionais disponíveis${activeLocation ? ` em ${activeLocation}` : ''}`}
               </p>
             </div>
 
             {/* Search bar and Filters */}
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1 max-w-md">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                  placeholder="Cidade (Ex: São Paulo)"
-                  className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
-                />
-                {locationFilter && (
-                  <button
-                    onClick={() => setLocationFilter('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                  >
-                    <X className="w-4 h-4 text-gray-400 hover:text-white" />
-                  </button>
-                )}
-              </div>
+              {searchMode === 'near' && (
+                <div className="relative flex-1 max-w-md">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={nearLocation}
+                    onChange={(e) => setNearLocation(e.target.value)}
+                    placeholder="Cidade (Ex: São Paulo)"
+                    className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition-all backdrop-blur-sm shadow-sm"
+                  />
+                  {nearLocation && (
+                    <button
+                      onClick={() => setNearLocation('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                    >
+                      <X className="w-4 h-4 text-gray-400 hover:text-white" />
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="relative flex-1 max-w-md">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

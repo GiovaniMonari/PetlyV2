@@ -107,4 +107,14 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
   @IsArray()
   availability?: any[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  rating?: number;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

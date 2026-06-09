@@ -290,8 +290,17 @@ export class UsersService {
     return caregivers;
   }
 
+  async getMyLocation(userId: string): Promise<string> {
+    const user = await this.findById(userId);
+    return user.location || '';
+  }
 
-  
+  async updateMyLocation(userId: string, location: string): Promise<UserDocument> {
+    const user = await this.findById(userId);
+    user.location = location;
+    return user.save();
+  }
+
   async getOwnerPets(userId: string): Promise<PetDocument[]> {
     const user = await this.findById(userId);
 
@@ -342,4 +351,21 @@ export class UsersService {
     await user.save();
     return user;
   } 
+
+  async updatePet(
+    petId: string,
+    updateData: Partial<PetDocument>,
+  ): Promise<PetDocument> {
+    const pet = await this.petModel.findByIdAndUpdate(
+      petId,
+      { $set: updateData },
+      { new: true },
+    ).exec();
+
+    if (!pet) {
+      throw new NotFoundException('Pet não encontrado');
+    }
+
+    return pet;
+  }
 }

@@ -136,10 +136,10 @@ export default function PerfilPage() {
     try {
       const payload: any = {
         name: editForm.name,
+        location: editForm.location,
       };
 
       if (profile.role === 'caregiver') {
-        payload.location = editForm.location;
         payload.services = editForm.services;
         payload.availableDays = editForm.availableDays;
       }
@@ -402,21 +402,22 @@ export default function PerfilPage() {
                       </p>
                     </div>
                   )}
-                  {profile.location && (
-                    <div className="space-y-1">
-                      <span className="text-sm font-medium text-gray-500">Localização Base</span>
-                      {isEditing ? (
-                        <input 
-                          type="text" 
-                          value={editForm.location} 
-                          onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                          className="w-full text-white font-medium bg-black/40 px-4 py-3 rounded-xl border border-[#FF6B35]/50 focus:outline-none"
-                        />
-                      ) : (
-                        <p className="text-white font-medium bg-black/30 px-4 py-3 rounded-xl border border-white/5">{profile.location}</p>
-                      )}
-                    </div>
-                  )}
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium text-gray-500">Localização Base</span>
+                    {isEditing ? (
+                      <input 
+                        type="text" 
+                        value={editForm.location} 
+                        onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                        className="w-full text-white font-medium bg-black/40 px-4 py-3 rounded-xl border border-[#FF6B35]/50 focus:outline-none"
+                        placeholder="Sua cidade / Estado"
+                      />
+                    ) : (
+                      <p className="text-white font-medium bg-black/30 px-4 py-3 rounded-xl border border-white/5">
+                        {profile.location || 'Ainda não informada'}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
 

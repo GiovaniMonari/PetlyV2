@@ -30,6 +30,7 @@ import {
   apiGetCaregiver,
   apiGetMyBookings,
   apiGetMyPets,
+  apiGetProfile,
   apiSubmitBookingReview,
   getUser,
   isAuthenticated,
@@ -192,12 +193,42 @@ export default function CaregiverDetailPage() {
       fetchAddressFromCep(cleaned);
     }
   };
+
+  function normalizeLocationString(value?: string) {
+    return (value || '')
+      .toLowerCase()
+      .replace(/[,\.-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function isSameCityOrNear(userLoc?: string, caregiverLoc?: string) {
+    if (!userLoc || !caregiverLoc) return false;
+    const normalizedUser = normalizeLocationString(userLoc);
+    const normalizedCaregiver = normalizeLocationString(caregiverLoc);
+
+    if (normalizedUser === normalizedCaregiver) return true;
+
+    const userParts = normalizedUser.split(' ');
+    const caregiverParts = normalizedCaregiver.split(' ');
+    const userCity = userParts[0] || '';
+    const caregiverCity = caregiverParts[0] || '';
+    const userState = userParts[userParts.length - 1] || '';
+    const caregiverState = caregiverParts[caregiverParts.length - 1] || '';
+
+    if (userCity && caregiverCity && userCity === caregiverCity) return true;
+    if (userState && caregiverState && userState === caregiverState) return true;
+
+    return caregiverParts.includes(userCity) || userParts.includes(caregiverCity);
+  }
+
   const [selectedBookingId, setSelectedBookingId] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
+  const [myLocation, setMyLocation] = useState('');
 
   // Calendar state
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -567,6 +598,20 @@ export default function CaregiverDetailPage() {
   }, [services, selectedService]);
 
   useEffect(() => {
+    if (isTutor) {
+      apiGetProfile()
+        .then((profile) => {
+          if (profile?.location) {
+            setMyLocation(profile.location);
+          }
+        })
+        .catch(() => {
+          setMyLocation('');
+        });
+    }
+  }, [isTutor]);
+
+  useEffect(() => {
     if (!selectedBookingId && reviewableBookings.length > 0) {
       setSelectedBookingId(reviewableBookings[0]._id);
     }
@@ -709,6 +754,16 @@ export default function CaregiverDetailPage() {
     const todayStr = formatDateToYYYYMMDD(new Date());
     if (startDate < todayStr || endDate < todayStr) {
       setBookingError('Não é possível criar reservas para datas passadas.');
+      return;
+    }
+
+    if (!myLocation) {
+      setBookingError('Atualize sua localização no perfil para contratar cuidadores próximos.');
+      return;
+    }
+
+    if (!caregiver?.location || !isSameCityOrNear(myLocation, caregiver.location)) {
+      setBookingError('Só é permitido contratar cuidadores na mesma cidade ou no mesmo estado que você.');
       return;
     }
 

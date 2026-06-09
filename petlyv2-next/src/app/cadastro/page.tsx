@@ -55,7 +55,7 @@ export default function CadastroPage() {
 
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (debouncedLocation.length > 2 && showSuggestions && accountType === 'cuidador') {
+      if (debouncedLocation.length > 2 && showSuggestions) {
         setIsSearching(true);
         const results = await searchLocation(debouncedLocation);
         setSuggestions(results);
@@ -66,7 +66,7 @@ export default function CadastroPage() {
     };
 
     fetchSuggestions();
-  }, [debouncedLocation, showSuggestions, accountType]);
+  }, [debouncedLocation, showSuggestions]);
 
   const maskCPF = (value: string) => {
     return value
@@ -173,9 +173,13 @@ export default function CadastroPage() {
         return;
       }
     } else {
-      // Tutor validation
-      if (!formData.email || !formData.password) {
-        setApiError('Preencha todos os campos');
+      const isEmailValid = validateField('email', formData.email);
+      const isLocationValid = validateField('location', formData.location);
+      const isPasswordValid = validateField('password', formData.password);
+
+      setTouched((prev) => ({ ...prev, email: true, location: true, password: true }));
+
+      if (!(isEmailValid && isLocationValid && isPasswordValid)) {
         return;
       }
     }
@@ -189,6 +193,7 @@ export default function CadastroPage() {
           email: formData.email,
           password: formData.password,
           role: 'tutor',
+          location: formData.location,
         });
       } else {
         await apiRegister({
@@ -323,61 +328,59 @@ export default function CadastroPage() {
               </div>
             )}
 
-            {accountType === 'cuidador' && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300 relative">
-                <label className="text-sm font-medium text-gray-300 ml-1">Localização</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <MapPin className={`h-5 w-5 text-gray-500 group-focus-within:${primaryColor} transition-colors`} />
-                  </div>
-                  <input
-                    type="text"
-                    name="location"
-                    required
-                    value={formData.location}
-                    onChange={(e) => {
-                      handleChange(e);
-                      setShowSuggestions(true);
-                    }}
-                    onBlur={(e) => {
-                      setTimeout(() => {
-                        setShowSuggestions(false);
-                        handleBlur(e);
-                      }, 200);
-                    }}
-                    placeholder="Sua cidade / Estado"
-                    className={`w-full bg-black/40 border ${
-                      errors.location ? 'border-red-500 focus:ring-red-500' : `border-white/10 ${primaryBorder} ${primaryRing}`
-                    } text-white rounded-xl py-3 pl-11 pr-4 outline-none focus:ring-1 transition-all placeholder:text-gray-600`}
-                    autoComplete="off"
-                  />
-
-                  {/* Autocomplete Dropdown */}
-                  {showSuggestions && (suggestions.length > 0 || isSearching) && (
-                    <div className="absolute z-50 w-full mt-2 bg-[#1f1f1f] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
-                      {showLoading ? (
-                        <div className="px-4 py-3 text-sm text-gray-400">Buscando...</div>
-                      ) : (
-                        suggestions.map((sug, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => {
-                              setFormData((prev) => ({ ...prev, location: sug }));
-                              setShowSuggestions(false);
-                              validateField('location', sug);
-                            }}
-                            className={`px-4 py-3 text-sm text-gray-300 hover:bg-white/10 cursor-pointer transition-colors ${idx !== suggestions.length -1 ? 'border-b border-white/5' : ''}`}
-                          >
-                            {sug}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+            <div className="space-y-2 animate-in fade-in slide-in-from-left-4 duration-300 relative">
+              <label className="text-sm font-medium text-gray-300 ml-1">Localização</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <MapPin className={`h-5 w-5 text-gray-500 group-focus-within:${primaryColor} transition-colors`} />
                 </div>
-                {errors.location && <p className="mt-1 text-xs text-red-500 font-medium ml-1">{errors.location}</p>}
+                <input
+                  type="text"
+                  name="location"
+                  required
+                  value={formData.location}
+                  onChange={(e) => {
+                    handleChange(e);
+                    setShowSuggestions(true);
+                  }}
+                  onBlur={(e) => {
+                    setTimeout(() => {
+                      setShowSuggestions(false);
+                      handleBlur(e);
+                    }, 200);
+                  }}
+                  placeholder="Sua cidade / Estado"
+                  className={`w-full bg-black/40 border ${
+                    errors.location ? 'border-red-500 focus:ring-red-500' : `border-white/10 ${primaryBorder} ${primaryRing}`
+                  } text-white rounded-xl py-3 pl-11 pr-4 outline-none focus:ring-1 transition-all placeholder:text-gray-600`}
+                  autoComplete="off"
+                />
+
+                {/* Autocomplete Dropdown */}
+                {showSuggestions && (suggestions.length > 0 || isSearching) && (
+                  <div className="absolute z-50 w-full mt-2 bg-[#1f1f1f] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                    {showLoading ? (
+                      <div className="px-4 py-3 text-sm text-gray-400">Buscando...</div>
+                    ) : (
+                      suggestions.map((sug, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, location: sug }));
+                            setShowSuggestions(false);
+                            validateField('location', sug);
+                          }}
+                          className={`px-4 py-3 text-sm text-gray-300 hover:bg-white/10 cursor-pointer transition-colors ${idx !== suggestions.length -1 ? 'border-b border-white/5' : ''}`}
+                        >
+                          {sug}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+              {errors.location && <p className="mt-1 text-xs text-red-500 font-medium ml-1">{errors.location}</p>}
+            </div>
 
             <div className="space-y-2 animate-in fade-in duration-300">
               <label className="text-sm font-medium text-gray-300 ml-1">Senha</label>

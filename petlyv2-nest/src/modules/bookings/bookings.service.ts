@@ -19,6 +19,33 @@ export class BookingsService {
     private readonly usersService: UsersService,
   ) {}
 
+  private normalizeLocation(value?: string): string {
+    return (value || '')
+      .toLowerCase()
+      .replace(/[,\.-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private isSameCityOrState(a?: string, b?: string): boolean {
+    const normalizedA = this.normalizeLocation(a);
+    const normalizedB = this.normalizeLocation(b);
+    if (!normalizedA || !normalizedB) return false;
+    if (normalizedA === normalizedB) return true;
+
+    const aParts = normalizedA.split(' ');
+    const bParts = normalizedB.split(' ');
+    const aCity = aParts[0] || '';
+    const bCity = bParts[0] || '';
+    const aState = aParts[aParts.length - 1] || '';
+    const bState = bParts[bParts.length - 1] || '';
+
+    if (aCity && bCity && aCity === bCity) return true;
+    if (aState && bState && aState === bState) return true;
+
+    return aParts.some((part) => bParts.includes(part)) || bParts.some((part) => aParts.includes(part));
+  }
+
   async create(
     tutorId: string,
     createBookingDto: CreateBookingDto,
@@ -27,6 +54,21 @@ export class BookingsService {
     const caregiver = await this.usersService.findById(createBookingDto.caregiverId);
     if (!caregiver || caregiver.role !== 'caregiver') {
       throw new NotFoundException('Cuidador não encontrado');
+    }
+
+    const tutor = await this.usersService.findById(tutorId);
+    if (!tutor.location?.trim()) {
+      throw new BadRequestException('Atualize sua localização no perfil para contratar cuidadores próximos.');
+    }
+
+    if (!caregiver.location?.trim()) {
+      throw new BadRequestException('Localização do cuidador não está disponível.');
+    }
+
+    if (!this.isSameCityOrState(tutor.location, caregiver.location)) {
+      throw new BadRequestException(
+        'Só é permitido contratar cuidadores na mesma cidade ou no mesmo estado que você.',
+      );
     }
 
     const startDate = new Date(createBookingDto.startDate);

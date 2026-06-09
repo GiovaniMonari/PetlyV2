@@ -19,10 +19,7 @@
     "noFallthroughCasesInSwitch": false,
     "paths": {
       "@modules/*": ["src/modules/*"],
-      "@common/*": ["common/*"],
-      "@config/*": ["config/*"],
-      "@utils/*": ["utils/*"]
     }
   },
-  "include": ["src/**/*", "src/modules/**/*", "common/**/*", "config/**/*", "utils/**/*"]
+  "include": ["src/**/*", "src/modules/**/*"]
 }

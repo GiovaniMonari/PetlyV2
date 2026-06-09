@@ -24,6 +24,10 @@ export class CreateUserDto {
   @MinLength(6)
   password!: string;
 
+  @IsOptional()
+  @IsString()
+  location?: string;
+
   @IsEnum(UserRole)
   role!: UserRole;
 
@@ -31,10 +35,6 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   cpf?: string;
-
-  @IsOptional()
-  @IsString()
-  location?: string;
 
   @IsOptional()
   @IsArray()

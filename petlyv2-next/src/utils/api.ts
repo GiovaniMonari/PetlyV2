@@ -106,6 +106,7 @@ export interface RegisterTutorPayload {
   email: string;
   password: string;
   role: 'tutor';
+  location?: string;
 }
 
 export interface RegisterCaregiverPayload {
