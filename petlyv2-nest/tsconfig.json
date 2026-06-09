@@ -9,7 +9,6 @@
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "dist",
-    "rootDir": "./",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
@@ -25,5 +24,5 @@
       "@utils/*": ["utils/*"]
     }
   },
-  "include": ["src/**/*", "src/modules/**/*", "common/**/*", "config/**/*", "utils/**/*", "dist"]
+  "include": ["src/**/*", "src/modules/**/*", "common/**/*", "config/**/*", "utils/**/*"]
 }
