@@ -1,8 +1,8 @@
-import { AuthModule } from '@modules/auth/auth.module';
-import { BookingsModule } from '@modules/bookings/bookings.module';
-import { CaregiversModule } from '@modules/caregivers/caregivers.module';
-import { UserPetsModule } from '@modules/user-pets/user-pets.module';
-import { UsersModule } from '@modules/users/users.module';
+import { AuthModule } from 'src/modules/auth/auth.module';
+import { BookingsModule } from 'src/modules/bookings/bookings.module';
+import { CaregiversModule } from 'src/modules/caregivers/caregivers.module';
+import { UserPetsModule } from 'src/modules/user-pets/user-pets.module';
+import { UsersModule } from 'src/modules/users/users.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';

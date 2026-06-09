@@ -12,7 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { CreateUserDto } from './create-user.dto';
-import { PetSize, PetType } from '@modules/user-pets/schemas/pets.schema';
+import { PetSize, PetType } from 'src/modules/user-pets/schemas/pets.schema';
 
 class ServiceItemDto {
   @IsOptional()

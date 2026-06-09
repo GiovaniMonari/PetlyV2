@@ -6,7 +6,7 @@ import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Pet, PetDocument } from '@modules/user-pets/schemas/pets.schema';
+import { Pet, PetDocument } from 'src/modules/user-pets/schemas/pets.schema';
 
 @Injectable()
 export class UsersService {

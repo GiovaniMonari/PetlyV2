@@ -1,6 +1,6 @@
 import { IsArray, IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
 import { CaregiverType } from "./create-caregiver.dto";
-import { PetSize } from "@modules/user-pets/schemas/pets.schema";
+import { PetSize } from "src/modules/user-pets/schemas/pets.schema";
 
 export class PetsQuantityDto {
   @IsOptional()
