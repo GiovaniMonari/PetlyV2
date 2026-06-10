@@ -15,6 +15,7 @@ import { ServiceDto } from "./dto/service-dto";
 import { UpdateServiceDto } from "./dto/update-services.dto";
 import * as bcrypt from "bcrypt";
 import { AvailabilityDto } from "./dto/availability.dto";
+import { Booking, BookingDocument } from "@modules/bookings/schemas/booking.schema";
 
 const SERVICE_DEFAULTS: Record<
   ServiceDto["type"],
@@ -47,6 +48,8 @@ export class CaregiversService {
   constructor(
     @InjectModel(Caregiver.name)
     private caregiverModel: Model<CaregiverDocument>,
+    @InjectModel(Booking.name)
+    private reviewModel: Model<BookingDocument>,
   ) {}
 
   // ✅ aplica defaults de serviço
@@ -386,5 +389,27 @@ export class CaregiversService {
     if (!result) {
       throw new NotFoundException("Caregiver não encontrado");
     }
+  }
+
+  async findMyReviews(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException("ID inválido");
+    }
+
+    const bookingsWithReviews = await this.reviewModel
+      .find({ caregiverId: new Types.ObjectId(id), review: { $exists: true, $ne: null } })
+      .select('review tutorId')
+      .populate('tutorId', 'name')
+      .lean()
+      .exec();
+
+    // Map to return just the review data with additional context
+    return bookingsWithReviews
+      .filter(booking => booking.review)
+      .map((booking: any) => ({
+        ...booking.review,
+        tutorId: booking.tutorId?._id?.toString() || booking.tutorId?.toString(),
+        tutorName: booking.tutorId?.name || 'Cliente',
+      }));
   }
 }

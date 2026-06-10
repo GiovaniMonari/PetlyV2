@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PawPrint, Menu, X, LogOut, User, Heart } from 'lucide-react';
+import { PawPrint, Menu, X, LogOut, User, Heart, Briefcase } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { getUser, logout } from '@/utils/api';
 import BrandLogo from '@/components/BrandLogo';
@@ -59,6 +59,20 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
                 }`}
               >
                 Encontrar Cuidador
+              </Link>
+            )}
+
+            {/* Caregiver dashboard link */}
+            {user?.role === 'caregiver' && (
+              <Link
+                href="/dashboard"
+                className={`text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  pathname.startsWith('/dashboard')
+                    ? 'text-[#FF6B35]' : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                <Briefcase className="w-4 h-4" />
+                Meu Painel
               </Link>
             )}
 
@@ -140,6 +154,20 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
               }`}
             >
               Encontrar Cuidador
+            </Link>
+          )}
+          {/* Caregiver dashboard link (mobile) */}
+          {user?.role === 'caregiver' && (
+            <Link
+              href="/dashboard"
+              onClick={() => setMobileOpen(false)}
+              className={`py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                pathname.startsWith('/dashboard')
+                  ? 'text-[#FF6B35]' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              Meu Painel
             </Link>
           )}
           {isTutor && (

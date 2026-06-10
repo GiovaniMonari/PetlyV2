@@ -58,6 +58,7 @@ export default function PerfilPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'info' | 'reservas' | 'config'>('info');
+  const isCaregiver = profile?.role === 'caregiver';
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -164,13 +165,14 @@ export default function PerfilPage() {
 
     const fetchProfileData = async () => {
       try {
-        const [profileData, bookingsData] = await Promise.all([
-          apiGetProfile(),
-          apiGetMyBookings()
-        ]);
-        
+        const profileData = await apiGetProfile();
         setProfile(profileData);
-        setBookings(bookingsData || []);
+
+        // Only fetch bookings for tutors
+        if (profileData.role !== 'caregiver') {
+          const bookingsData = await apiGetMyBookings();
+          setBookings(bookingsData || []);
+        }
       } catch (error) {
         console.error('Error fetching profile data:', error);
       } finally {
@@ -316,17 +318,20 @@ export default function PerfilPage() {
           >
             <User className="w-4 h-4" /> Informações
           </button>
-          <button
-            onClick={() => setActiveTab('reservas')}
-            className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'reservas' ? 'bg-[#FF6B35] text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Calendar className="w-4 h-4" /> Minhas Reservas
-            {bookings.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-black/30 rounded-full text-xs">{bookings.length}</span>
-            )}
-          </button>
+          {/* Reservas tab — only for tutors */}
+          {profile.role !== 'caregiver' && (
+            <button
+              onClick={() => setActiveTab('reservas')}
+              className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'reservas' ? 'bg-[#FF6B35] text-white shadow-lg' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Calendar className="w-4 h-4" /> Minhas Reservas
+              {bookings.length > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-black/30 rounded-full text-xs">{bookings.length}</span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('config')}
             className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
@@ -424,8 +429,8 @@ export default function PerfilPage() {
               </div>
             )}
 
-            {/* RESERVAS TAB */}
-            {activeTab === 'reservas' && (
+            {/* RESERVAS TAB — tutors only */}
+            {activeTab === 'reservas' && profile.role !== 'caregiver' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-xl font-bold text-white">Histórico de Reservas</h2>
@@ -485,7 +490,7 @@ export default function PerfilPage() {
                                   <span className="text-xs font-semibold text-gray-500 uppercase block mb-1">Serviço</span>
                                   <div className="text-white font-medium bg-black/40 px-3 py-2 rounded-lg border border-white/5 flex items-center gap-2 capitalize">
                                     <PawPrint className="w-4 h-4 text-[#FF6B35]" />
-                                    {booking.serviceType} ({booking.petId.name})
+                                    {booking.serviceType} ({booking.petId?.name || 'Pet não informado'})
                                   </div>
                                 </div>
 
@@ -493,7 +498,7 @@ export default function PerfilPage() {
                                   <span className="text-xs font-semibold text-gray-500 uppercase block mb-1">Cuidador</span>
                                   <div className="text-white font-medium bg-black/40 px-3 py-2 rounded-lg border border-white/5 flex items-center gap-2 capitalize">
                                     <PawPrint className="w-4 h-4 text-[#FF6B35]" />
-                                    {booking.caregiverId?.name || booking.caregiverId || '—'}
+                                    {booking.caregiverId?.name || 'Cuidador não informado'}
                                   </div>
                                 </div>
                               </div>

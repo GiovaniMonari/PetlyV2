@@ -68,46 +68,13 @@ export class CaregiversController {
     return Object.values(PetsQuantityDto);
   }
 
+  @Get(':id/Reviews')
+  findMyReviews(@Param('id') id: string) {
+    return this.caregiversService.findMyReviews(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.caregiversService.findOne(id);
-  }
-
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateCaregiverDto: UpdateCaregiverDto,
-  ) {
-    return this.caregiversService.update(id, updateCaregiverDto);
-  }
-
-  @Patch(':id/services/:type')
-  updateService(
-    @Param('id') id: string,
-    @Param('type') type: ServiceDto['type'],
-    @Body() updateServiceDto: UpdateServiceDto,
-  ) {
-    return this.caregiversService.updateService(id, type, updateServiceDto);
-  }
-
-  @Post(':id/availability')
-  addAvailability(
-    @Param('id') id: string,
-    @Body() availability: AvailabilityDto,
-  ) {
-    return this.caregiversService.addAvailability(id, availability);
-  }
-
-  @Patch(':id/availability')
-  updateAvailability(
-    @Param('id') id: string,
-    @Body() availability: AvailabilityDto,
-  ) {
-    return this.caregiversService.updateAvailability(id, availability);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.caregiversService.remove(id);
   }
 }

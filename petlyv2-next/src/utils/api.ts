@@ -389,3 +389,14 @@ export async function apiRemoveFavoriteCaregiver(
     method: 'DELETE',
   });
 }
+
+export async function apiGetCaregiverReviews(id: string): Promise<any> {
+  return request(`/caregivers/${id}/Reviews`);
+}
+
+export async function apiDeleteProfile(id: string): Promise<any> {
+  return request(`/users/${id}`, {
+    method: 'DELETE',
+  });
+}
+
