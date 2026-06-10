@@ -327,6 +327,22 @@ export default function CaregiverDetailPage() {
   const isTutor = currentUser?.role === 'tutor';
   const isOwnProfile = normalizeId(currentUser?.id) === caregiverId;
 
+  const isLocationAllowed = useMemo(() => {
+    if (!isTutor || !caregiver?.location) return true;
+    return Boolean(myLocation && caregiver?.location && isSameCityOrNear(myLocation, caregiver.location));
+  }, [isTutor, myLocation, caregiver]);
+
+  const locationWarningMessage = useMemo(() => {
+    if (!isTutor || !caregiver?.location) return '';
+    if (!myLocation) {
+      return 'Atualize sua localização no perfil para contratar cuidadores próximos.';
+    }
+    if (!isLocationAllowed) {
+      return 'Este cuidador não está na mesma cidade ou no mesmo estado que você. As reservas só podem ser feitas com cuidadores próximos.';
+    }
+    return '';
+  }, [isTutor, caregiver, myLocation, isLocationAllowed]);
+
   const services = useMemo(() => {
     if (!caregiver) return [];
 
@@ -1102,6 +1118,22 @@ export default function CaregiverDetailPage() {
                     </Link>
                   </div>
                 </div>
+              ) : locationWarningMessage ? (
+                <div className="relative overflow-hidden bg-black/40 border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col items-center text-center animate-in fade-in duration-500">
+                  <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#FF6B35]/10 rounded-full blur-2xl pointer-events-none"></div>
+                  <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-[#06A77D]/5 rounded-full blur-2xl pointer-events-none"></div>
+
+                  <div className="w-16 h-16 rounded-full bg-[#FF6B35]/10 border border-[#FF6B35]/20 flex items-center justify-center mb-6 shadow-lg shadow-[#FF6B35]/5">
+                    <AlertCircle className="w-8 h-8 text-[#FF6B35]" />
+                  </div>
+
+                  <h3 className="text-lg font-bold text-white mb-3">
+                    Reserva indisponível por região
+                  </h3>
+                  <p className="text-sm text-gray-300 max-w-md leading-relaxed mb-8">
+                    {locationWarningMessage}
+                  </p>
+                </div>
               ) : (
                 <>
                 {myPets.length > 0 && incompatiblePets.length > 0 && (
@@ -1457,7 +1489,12 @@ export default function CaregiverDetailPage() {
 
                   <button
                     onClick={() => setShowPaymentModal(true)}
-                    disabled={isBooking || !selectedServiceData || !selectedPetId}
+                    disabled={
+                      isBooking ||
+                      !selectedServiceData ||
+                      !selectedPetId ||
+                      Boolean(isTutor && caregiver?.location && !isLocationAllowed)
+                    }
                     className="w-full py-3 rounded-xl bg-[#FF6B35] text-white font-semibold hover:bg-[#E55A2B] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isBooking ? (
