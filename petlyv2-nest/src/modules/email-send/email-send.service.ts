@@ -17,7 +17,7 @@ export class EmailService {
     private readonly emailQueue: Queue,
   ) {}
 
-  async sendResetPasswordEmail(params: SendResetPasswordEmailParams) {
+  async sendResetPasswordEmailJob(params: SendResetPasswordEmailParams) {
     await this.emailQueue.add('send-reset-password', params, {
       attempts: 3,
       backoff: {

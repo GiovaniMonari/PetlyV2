@@ -2,14 +2,17 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Resend } from 'resend';
 import { ConfigService } from '@nestjs/config';
-import { EmailLog } from './schemas/email.schema';
+import { EmailLog, EmailLogDocument } from './schemas/email.schema';
 import { Model } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose/dist/common/mongoose.decorators';
 
 @Processor('email-queue')
 export class EmailProcessor extends WorkerHost {
   constructor(
     private configService: ConfigService,
-    private emailLogModel: Model<any>,
+
+    @InjectModel(EmailLog.name)
+    private emailLogModel: Model<EmailLogDocument>,
   ) {
     super();
   }

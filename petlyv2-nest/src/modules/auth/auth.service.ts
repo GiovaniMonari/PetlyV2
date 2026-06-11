@@ -8,7 +8,7 @@ import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset.password.dto';
-import { EmailSendService } from '../email-send/email-send.service';
+import { EmailService } from '../email-send/email-send.service';
 import { ForgetPasswordDto } from './dto/forget.password.dto';
 import { ForgotPasswordResponseDto } from './dto/reset.message.dto';
 
@@ -17,7 +17,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    private readonly emailSendService: EmailSendService,
+    private readonly emailService: EmailService,
 
     @InjectRedis() private readonly redis: Redis,
   ) {}
@@ -95,6 +95,7 @@ export class AuthService {
         },
       );
 
+      // 🔥 garante "1 token por vez"
       await this.redis.set(
         `password-reset:${user._id}`,
         resetToken,
@@ -102,11 +103,12 @@ export class AuthService {
         1800,
       );
 
-      await this.emailSendService.sendResetPasswordEmail({
+      // 🔥 envia via fila (correto)
+      await this.emailService.sendResetPasswordEmailJob({
         email: user.email,
         userId: user._id as Types.ObjectId,
         userName: user.name,
-        token: resetToken,
+        token: resetToken, // ✅ FIX AQUI
       });
     }
 
