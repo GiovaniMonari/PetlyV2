@@ -23,6 +23,8 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ProfilePhotoUpload from '@/components/ProfilePhotoUpload';
 import { apiGetProfile, apiGetMyBookings, isAuthenticated, logout, apiUpdateProfile, setUser as setLocalUser } from '@/utils/api';
+import { useDebounce } from '@/hooks/useDebounce';
+import { searchLocation } from '@/utils/location';
 
 function formatBookingDate(dateStr: string, timeStr?: string): string {
   if (!dateStr) return '';
@@ -59,10 +61,17 @@ export default function PerfilPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'info' | 'reservas' | 'config'>('info');
   const isCaregiver = profile?.role === 'caregiver';
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
+  const debouncedEditLocation = useDebounce(editForm.location, 500);
+  const isDebouncing = editForm.location && editForm.location !== debouncedEditLocation && editForm.location.length > 2;
+  const showLoading = isSearching || isDebouncing;
 
   const AVAILABLE_SERVICES = ['Hospedagem', 'Visita em domicílio', 'Passeio'];
   const DAYS_OF_WEEK = [
@@ -183,6 +192,25 @@ export default function PerfilPage() {
     fetchProfileData();
   }, [router]);
 
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (debouncedEditLocation.length > 2 && showSuggestions) {
+        setIsSearching(true);
+
+        const results = await searchLocation(
+          debouncedEditLocation
+        );
+
+        setSuggestions(results);
+        setIsSearching(false);
+      } else {
+        setSuggestions([]);
+      }
+    };
+
+    fetchSuggestions();
+  }, [debouncedEditLocation, showSuggestions]);
+
   const handleLogout = () => {
     logout();
     router.push('/');
@@ -197,6 +225,11 @@ export default function PerfilPage() {
       case 'completed': return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
       default: return 'text-gray-400 bg-gray-500/10 border-gray-500/20';
     }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setTouched((prev) => ({ ...prev, [name]: true }));
   };
 
   const getStatusText = (status: string) => {
@@ -407,13 +440,23 @@ export default function PerfilPage() {
                       </p>
                     </div>
                   )}
-                  <div className="space-y-1">
+                  <div className="space-y-1 relative">
                     <span className="text-sm font-medium text-gray-500">Localização Base</span>
                     {isEditing ? (
                       <input 
-                        type="text" 
+                        type="text"
+                        name="location" 
                         value={editForm.location} 
-                        onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                        onChange={(e) => {
+                          setEditForm({...editForm, location: e.target.value});
+                          setShowSuggestions(true);
+                        }}
+                        onBlur={(e) => {
+                          setTimeout(() => {
+                            setShowSuggestions(false);
+                            handleBlur(e);
+                          }, 200);
+                        }}
                         className="w-full text-white font-medium bg-black/40 px-4 py-3 rounded-xl border border-[#FF6B35]/50 focus:outline-none"
                         placeholder="Sua cidade / Estado"
                       />
@@ -421,6 +464,27 @@ export default function PerfilPage() {
                       <p className="text-white font-medium bg-black/30 px-4 py-3 rounded-xl border border-white/5">
                         {profile.location || 'Ainda não informada'}
                       </p>
+                    )}
+                    {/* Autocomplete Dropdown */}
+                    {showSuggestions && (suggestions.length > 0 || isSearching) && (
+                      <div className="absolute z-50 w-full mt-2 bg-[#1f1f1f] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                        {showLoading ? (
+                          <div className="px-4 py-3 text-sm text-gray-400">Buscando...</div>
+                        ) : (
+                          suggestions.map((sug, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setEditForm((prev: any) => ({ ...prev, location: sug }));
+                                setShowSuggestions(false);
+                              }}
+                              className={`px-4 py-3 text-sm text-gray-300 hover:bg-white/10 cursor-pointer transition-colors ${idx !== suggestions.length -1 ? 'border-b border-white/5' : ''}`}
+                            >
+                              {sug}
+                            </div>
+                          ))
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

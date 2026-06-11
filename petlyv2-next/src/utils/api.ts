@@ -155,6 +155,15 @@ export async function apiRegister(
   return data;
 }
 
+export interface ResetPasswordPayload {
+  token: string;
+  password: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
 export async function apiForgetPassword(
   payload: ForgetPasswordPayload,
 ): Promise<ForgetPasswordResponse> {
@@ -162,6 +171,18 @@ export async function apiForgetPassword(
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+export async function apiResetPassword(
+  payload: ResetPasswordPayload,
+): Promise<ResetPasswordResponse> {
+  return request<ResetPasswordResponse>(
+    '/auth/reset-password',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 // ============================================================

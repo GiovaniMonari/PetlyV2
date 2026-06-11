@@ -4,6 +4,7 @@ import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgetPasswordDto } from './dto/forget.password.dto';
 import { ResetPasswordDto } from './dto/reset.password.dto';
+import { ForgotPasswordResponseDto } from './dto/reset.message.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -28,7 +29,21 @@ export class AuthController {
   }
 
   @Post('forget-password')
-  forgetPassword(@Body() forgetPasswordDto: ForgetPasswordDto): Promise<ResetPasswordDto> {
-    return this.authService.forgetPassword(forgetPasswordDto.email);
+  forgetPassword(
+    @Body() forgetPasswordDto: ForgetPasswordDto,
+  ): Promise<ForgotPasswordResponseDto> {
+    return this.authService.forgetPassword(
+      forgetPasswordDto.email,
+    );
+  }
+
+ @Post('reset-password')
+  resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ) {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.password,
+    );
   }
 }

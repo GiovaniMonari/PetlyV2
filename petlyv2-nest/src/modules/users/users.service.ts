@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, StringExpressionOperatorReturningBoolean, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -135,11 +135,6 @@ export class UsersService {
       throw new NotFoundException('ID inválido');
     }
 
-    if (updateUserDto.password) {
-      const salt = await bcrypt.genSalt(10);
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
-    }
-
     // If services are updated, calculate the min and max prices
     if (updateUserDto.services && updateUserDto.services.length > 0) {
       // Remove _id from services if present
@@ -197,6 +192,28 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async updatePassword(
+    id: string,
+    password: string,
+  ): Promise<void> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('ID inválido');
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    const user = await this.userModel.findByIdAndUpdate(
+      id,
+      {
+        password: hash,
+      },
+    );
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
   }
 
   async updateCaregiverRating(

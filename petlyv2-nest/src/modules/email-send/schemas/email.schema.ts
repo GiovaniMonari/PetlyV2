@@ -33,14 +33,8 @@ export class EmailLog {
   @Prop({ required: true, enum: EmailLogStatus })
   status!: EmailLogStatus;
 
-  @Prop()
-  providerMessageId?: string;
-
-  @Prop()
-  errorMessage?: string;
-
-  @Prop({ required: true, default: Date.now })
-  sentAt!: Date;
+  @Prop({ type: Object })
+  metadata?: Record<string, any>;
 }
 
 export const EmailLogSchema = SchemaFactory.createForClass(EmailLog);

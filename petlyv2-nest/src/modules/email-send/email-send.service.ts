@@ -40,7 +40,7 @@ export class EmailSendService {
 
     const baseUrl = frontendUrl.replace(/\/+$/, '');
     const normalizedPath = resetPath.startsWith('/') ? resetPath : `/${resetPath}`;
-    const resetUrl = `${baseUrl}${normalizedPath}?token=${encodeURIComponent(params.token)}&email=${encodeURIComponent(params.email)}`;
+    const resetUrl =`${baseUrl}${normalizedPath}?token=${encodeURIComponent(params.token)}`;
 
     const { data, error } = await resend.emails.send({
       from,
@@ -67,8 +67,6 @@ export class EmailSendService {
         type: EmailLogType.PASSWORD_RESET,
         provider: 'resend',
         status: EmailLogStatus.FAILED,
-        errorMessage: error.message,
-        sentAt: new Date(),
       });
 
       throw new BadGatewayException('Falha ao enviar e-mail de redefinicao.');
@@ -80,8 +78,6 @@ export class EmailSendService {
       type: EmailLogType.PASSWORD_RESET,
       provider: 'resend',
       status: EmailLogStatus.SENT,
-      providerMessageId: data?.id,
-      sentAt: new Date(),
     });
   }
 }

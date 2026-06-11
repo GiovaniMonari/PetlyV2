@@ -1,6 +1,11 @@
-import { IsString } from 'class-validator';
+// dto/reset-password.dto.ts
+import { IsString, MinLength } from 'class-validator';
 
 export class ResetPasswordDto {
   @IsString()
-  readonly message!: string;
+  token: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
 }

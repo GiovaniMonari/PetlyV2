@@ -2,11 +2,15 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Types } from 'mongoose';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { UsersService } from '../users/users.service';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset.password.dto';
 import { EmailSendService } from '../email-send/email-send.service';
+import { ForgetPasswordDto } from './dto/forget.password.dto';
+import { ForgotPasswordResponseDto } from './dto/reset.message.dto';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +18,8 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly emailSendService: EmailSendService,
+
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   /**
@@ -72,8 +78,9 @@ export class AuthService {
     };
   }
 
-  async forgetPassword(email: string): Promise<ResetPasswordDto> {
+  async forgetPassword(email: string): Promise<ForgotPasswordResponseDto> {
     const normalizedEmail = email.trim().toLowerCase();
+
     const user = await this.usersService.findByEmail(normalizedEmail);
 
     if (user) {
@@ -84,8 +91,15 @@ export class AuthService {
           purpose: 'password_reset',
         },
         {
-          expiresIn: process.env.RESET_PASSWORD_TOKEN_EXPIRATION || '30m',
+          expiresIn: '30m',
         },
+      );
+
+      await this.redis.set(
+        `password-reset:${user._id}`,
+        resetToken,
+        'EX',
+        1800,
       );
 
       await this.emailSendService.sendResetPasswordEmail({
@@ -98,7 +112,59 @@ export class AuthService {
 
     return {
       message:
-        'Se o e-mail informado estiver cadastrado, enviaremos as instrucoes de recuperacao em instantes.',
+        'Se o e-mail informado estiver cadastrado, enviaremos as instruções de recuperação em instantes.',
+    };
+  }
+
+  async validateResetToken(token: string) {
+    const payload = this.jwtService.verify(token);
+
+    const storedToken = await this.redis.get(
+      `password-reset:${payload.sub}`,
+    );
+
+    if (!storedToken) {
+      throw new UnauthorizedException(
+        'Token expirado ou inválido',
+      );
+    }
+
+    if (storedToken !== token) {
+      throw new UnauthorizedException(
+        'Existe um token mais recente para este usuário',
+      );
+    }
+
+    return payload;
+  }
+
+  async resetPassword(
+    token: string,
+    password: string,
+  ) {
+    const payload = this.jwtService.verify(token);
+
+    const storedToken = await this.redis.get(
+      `password-reset:${payload.sub}`,
+    );
+
+    if (!storedToken || storedToken !== token) {
+      throw new UnauthorizedException(
+        'Token inválido ou expirado',
+      );
+    }
+
+    await this.usersService.updatePassword(
+      payload.sub,
+      password,
+    );
+
+    await this.redis.del(
+      `password-reset:${payload.sub}`,
+    );
+
+    return {
+      message: 'Senha alterada com sucesso',
     };
   }
 }
