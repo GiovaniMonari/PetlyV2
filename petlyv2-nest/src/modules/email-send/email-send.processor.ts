@@ -41,8 +41,46 @@ export class EmailProcessor extends WorkerHost {
       to: [params.email],
       subject: 'Redefinição de senha - Petly',
       html: `
-        <h2>Olá ${params.userName}</h2>
-        <a href="${resetUrl}">Redefinir senha</a>
+        <div style="font-family: Arial, sans-serif; background:#f6f7fb; padding:40px 0;">
+          <div style="max-width:520px; margin:0 auto; background:#ffffff; border-radius:12px; padding:32px; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+
+            <h2 style="color:#111827; margin-bottom:16px;">
+              Olá, ${params.userName}
+            </h2>
+
+            <p style="color:#4b5563; font-size:15px; line-height:1.6;">
+              Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Petly</strong>.
+              Se foi você, clique no botão abaixo para criar uma nova senha com segurança.
+            </p>
+
+            <div style="text-align:center; margin:32px 0;">
+              <a href="${resetUrl}"
+                style="
+                  background:#f97316;
+                  color:#ffffff;
+                  padding:12px 20px;
+                  border-radius:8px;
+                  text-decoration:none;
+                  font-weight:600;
+                  display:inline-block;
+                ">
+                Redefinir minha senha
+              </a>
+            </div>
+
+            <p style="color:#6b7280; font-size:13px; line-height:1.5;">
+              Se você não solicitou isso, pode ignorar este e-mail com segurança.
+              Nenhuma ação será tomada na sua conta.
+            </p>
+
+            <hr style="border:none; border-top:1px solid #e5e7eb; margin:24px 0;" />
+
+            <p style="color:#9ca3af; font-size:12px; text-align:center;">
+              © ${new Date().getFullYear()} Petly. Projeto desenvolvido por Giovani Taver Monari.
+            </p>
+
+          </div>
+        </div>
       `,
     });
 
