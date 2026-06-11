@@ -1,13 +1,17 @@
+// src/modules/email/email.module.ts
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { EmailSendService } from './email-send.service';
-import { EmailLog, EmailLogSchema } from './schemas/email.schema';
+import { BullModule } from '@nestjs/bullmq';
+import { EmailService } from './email-send.service';
+import { EmailProcessor } from './email-send.processor';
+import { EMAIL_QUEUE } from './queues/email.queue';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: EmailLog.name, schema: EmailLogSchema }]),
+    BullModule.registerQueue({
+      name: EMAIL_QUEUE,
+    }),
   ],
-  providers: [EmailSendService],
-  exports: [EmailSendService],
+  providers: [EmailService, EmailProcessor],
+  exports: [EmailService],
 })
-export class EmailSendModule {}
+export class EmailModule {}

@@ -7,6 +7,7 @@ import { Module } from '@nestjs/common';
 import { RedisModule } from '@nestjs-modules/ioredis'
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { BullModule } from '@nestjs/bullmq/dist/bull.module';
 
 @Module({
   imports: [
@@ -26,6 +27,13 @@ import { MongooseModule } from '@nestjs/mongoose';
         uri: configService.get<string>('MONGODB_URI'),
       }),
     }),
+
+    BullModule.forRoot({
+      connection: {
+        url: process.env.REDIS_URL,
+      },
+    }),
+
     AuthModule,
     UsersModule,
     CaregiversModule,
