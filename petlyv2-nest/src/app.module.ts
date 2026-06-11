@@ -8,6 +8,10 @@ import { RedisModule } from '@nestjs-modules/ioredis'
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bullmq/dist/bull.module';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import { EmailModule } from '@modules/email-send/email-send.module';
+import { CacheModule } from '@modules/cache/cache.module';
 
 @Module({
   imports: [
@@ -34,6 +38,13 @@ import { BullModule } from '@nestjs/bullmq/dist/bull.module';
       },
     }),
 
+    BullBoardModule.forRoot({
+      route: '/queues',
+      adapter: ExpressAdapter,
+    }),
+
+    CacheModule,
+    EmailModule,
     AuthModule,
     UsersModule,
     CaregiversModule,

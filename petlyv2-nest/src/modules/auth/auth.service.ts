@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Types } from 'mongoose';
@@ -78,12 +78,42 @@ export class AuthService {
     };
   }
 
-  async forgetPassword(email: string): Promise<ForgotPasswordResponseDto> {
+  async forgetPassword(
+    email: string,
+  ): Promise<ForgotPasswordResponseDto> {
     const normalizedEmail = email.trim().toLowerCase();
 
     const user = await this.usersService.findByEmail(normalizedEmail);
 
     if (user) {
+      // Rate limit: máximo 5 solicitações por hora
+      const rateLimitKey = `password-reset-limit:${user.email}`;
+
+      const attempts = await this.redis.incr(rateLimitKey);
+
+      if (attempts === 1) {
+        await this.redis.expire(rateLimitKey, 3600);
+      }
+
+      if (attempts > 5) {
+        throw new HttpException(
+          'Muitas solicitações. Tente novamente mais tarde.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      // Cooldown: 1 e-mail por minuto
+      const cooldownKey = `password-reset-cooldown:${user._id}`;
+
+      const cooldown = await this.redis.get(cooldownKey);
+
+      if (cooldown) {
+        throw new HttpException(
+          'Aguarde alguns instantes antes de solicitar outro e-mail.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
       const resetToken = this.jwtService.sign(
         {
           sub: user._id,
@@ -95,7 +125,6 @@ export class AuthService {
         },
       );
 
-      // 🔥 garante "1 token por vez"
       await this.redis.set(
         `password-reset:${user._id}`,
         resetToken,
@@ -103,12 +132,19 @@ export class AuthService {
         1800,
       );
 
-      // 🔥 envia via fila (correto)
+      // ativa cooldown
+      await this.redis.set(
+        cooldownKey,
+        '1',
+        'EX',
+        60,
+      );
+
       await this.emailService.sendResetPasswordEmailJob({
         email: user.email,
         userId: user._id as Types.ObjectId,
         userName: user.name,
-        token: resetToken, // ✅ FIX AQUI
+        token: resetToken,
       });
     }
 

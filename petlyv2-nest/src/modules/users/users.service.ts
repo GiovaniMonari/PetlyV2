@@ -7,10 +7,12 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Pet, PetDocument } from 'src/modules/user-pets/schemas/pets.schema';
+import { CacheService } from '@modules/cache/cache.service';
 
 @Injectable()
 export class UsersService {
   constructor(
+    private readonly cacheService: CacheService,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
     private cloudinaryService: CloudinaryService,
@@ -44,15 +46,31 @@ export class UsersService {
       throw new NotFoundException('ID inválido');
     }
 
-    const user = await this.userModel.findById(id).select('-password').exec();
+    const cacheKey = `user-profile:${id}`;
+
+    const cached =
+      await this.cacheService.get<UserDocument>(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const user = await this.userModel
+      .findById(id)
+      .select('-password')
+      .exec();
+
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
-    return user;
-  }
 
-  async findAll(): Promise<UserDocument[]> {
-    return this.userModel.find().select('-password').exec();
+    await this.cacheService.set(
+      cacheKey,
+      user,
+      300,
+    );
+
+    return user;
   }
 
   async findCaregivers(filters: {
@@ -191,6 +209,11 @@ export class UsersService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
+
+    await this.cacheService.del(
+      `user-profile:${id}`,
+    );
+
     return user;
   }
 
@@ -260,6 +283,11 @@ export class UsersService {
     const result = await this.cloudinaryService.uploadFile(file);
     
     user.avatar = result.secure_url;
+
+    await this.cacheService.del(
+      `user-profile:${userId}`,
+    );
+
     return user.save();
   }
 
@@ -315,16 +343,39 @@ export class UsersService {
   async updateMyLocation(userId: string, location: string): Promise<UserDocument> {
     const user = await this.findById(userId);
     user.location = location;
+
+    await this.cacheService.del(
+      `user-profile:${userId}`,
+    );
+
     return user.save();
   }
 
-  async getOwnerPets(userId: string): Promise<PetDocument[]> {
+  async getOwnerPets(
+    userId: string,
+  ): Promise<PetDocument[]> {
+    const cacheKey = `user-pets:${userId}`;
+
+    const cached =
+      await this.cacheService.get<PetDocument[]>(
+        cacheKey,
+      );
+
+    if (cached) {
+      return cached;
+    }
+
     const user = await this.findById(userId);
 
     const pets = await this.petModel
       .find({ _id: { $in: user.pets } })
-      .select('-password -cpf')
       .exec();
+
+    await this.cacheService.set(
+      cacheKey,
+      pets,
+      300,
+    );
 
     return pets;
   }
@@ -342,6 +393,9 @@ export class UsersService {
     if (!user.pets.includes(petId)) {
       user.pets.push(petId);
       await user.save();
+      await this.cacheService.del(
+        `user-pets:${userId}`,
+      );
     }
 
     return user;
@@ -366,6 +420,11 @@ export class UsersService {
     );
 
     await user.save();
+
+    await this.cacheService.del(
+      `user-pets:${userId}`,
+    );
+
     return user;
   } 
 

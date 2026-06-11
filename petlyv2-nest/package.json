@@ -17,6 +17,9 @@
     "test:cov": "jest --coverage"
   },
   "dependencies": {
+    "@bull-board/api": "^8.0.0",
+    "@bull-board/express": "^8.0.0",
+    "@bull-board/nestjs": "^8.0.0",
     "@nestjs-modules/ioredis": "^2.2.1",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^10.0.0",
