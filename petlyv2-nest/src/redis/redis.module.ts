@@ -1,6 +1,6 @@
-// src/redis/redis.module.ts
 import { Module } from '@nestjs/common';
 import { RedisModule as NestRedisModule } from '@nestjs-modules/ioredis';
+import { RedisService } from './redis.service';
 
 @Module({
   imports: [
@@ -9,6 +9,7 @@ import { RedisModule as NestRedisModule } from '@nestjs-modules/ioredis';
       url: process.env.REDIS_URL,
     }),
   ],
-  exports: [NestRedisModule],
+  providers: [RedisService],
+  exports: [RedisService, NestRedisModule],
 })
 export class RedisModule {}

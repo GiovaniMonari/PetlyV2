@@ -685,17 +685,27 @@ export default function CaregiverDetailPage() {
       setPageError('');
 
       try {
-        const [caregiverData] = await Promise.all([apiGetCaregiver(caregiverId), fetchMyBookings(), fetchMyPets()]);
+        const [caregiverData] = await Promise.all([
+        apiGetCaregiver(caregiverId),
+        fetchMyBookings(),
+        fetchMyPets(),
+      ]);
 
-        if (!isMounted) return;
+      if (!isMounted) return;
 
-        if (!caregiverData || caregiverData.role !== 'caregiver') {
-          setPageError('Cuidador não encontrado.');
-          setCaregiver(null);
-          return;
-        }
+      if (!caregiverData || caregiverData.user?.role !== 'caregiver') {
+        setPageError('Cuidador não encontrado.');
+        setCaregiver(null);
+        return;
+      }
 
-        setCaregiver(caregiverData);
+      const normalizedCaregiver = {
+        ...caregiverData.profile,
+        ...caregiverData.user,
+        id: caregiverData.id,
+      };
+
+      setCaregiver(normalizedCaregiver);
       } catch {
         if (isMounted) {
           setPageError('Não foi possível carregar as informações do cuidador.');

@@ -1,4 +1,6 @@
 import { IsString, IsEmail, IsArray, IsEnum, IsOptional, MinLength, IsNumber } from 'class-validator';
+import { ServiceDto } from './service-dto';
+import { AvailabilityDto } from './availability.dto';
 
 export enum CaregiverType {
   DOG = 'dog',
@@ -9,6 +11,7 @@ export enum CaregiverType {
 
 export class CreateCaregiverDto {
   @IsString()
+  @MinLength(2)
   name!: string;
 
   @IsEmail()
@@ -18,12 +21,42 @@ export class CreateCaregiverDto {
   @MinLength(6)
   password!: string;
 
-  @IsString()
   cpf!: string;
 
-  @IsString()
-  location!: string;
+  bio?: string;
 
-  @IsEnum(CaregiverType)
-  type!: CaregiverType;
+  @IsArray()
+  @IsString({ each: true })
+  specialties?: string[];
+  
+  @IsArray()
+  @IsEnum(CaregiverType, { each: true })
+  petTypes?: CaregiverType[];
+
+  petsQuantity?: {
+    type: string;
+    quantity: number;
+    sizes?: string[];
+  }[];
+
+  @IsArray()
+  @IsOptional()
+  services?: ServiceDto[];
+
+  @IsArray()
+  @IsOptional()
+  availability?: AvailabilityDto[];
+
+  @IsNumber()
+  @IsOptional()
+  price?: number;
+
+  @IsNumber()
+  @IsOptional()
+  minPrice?: number;
+
+  @IsNumber()
+  @IsOptional()
+  maxPrice?: number;
+
 }

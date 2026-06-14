@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -10,6 +12,13 @@ import { Booking, BookingDocument, BookingStatus } from './schemas/booking.schem
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UsersService } from '../users/users.service';
+import { CaregiversService } from '@modules/caregivers/caregivers.service';
+import { BookingPricing } from './domain/booking.pricing';
+import { BookingValidation } from './domain/booking.validation';
+import { BookingLocation } from './domain/booking.location';
+import { RedisService } from 'src/redis/redis.service';
+import { Job, Queue } from 'bullmq';
+import { BOOKINGS_QUEUE } from './queues/bookings.queue.module';
 
 @Injectable()
 export class BookingsService {
@@ -17,6 +26,10 @@ export class BookingsService {
     @InjectModel(Booking.name)
     private bookingModel: Model<BookingDocument>,
     private readonly usersService: UsersService,
+    private readonly caregiversService: CaregiversService,
+    private readonly redisService: RedisService,
+    @Inject(BOOKINGS_QUEUE)
+    private readonly bookingsQueue: Queue,  
   ) {}
 
   private normalizeLocation(value?: string): string {
@@ -46,108 +59,159 @@ export class BookingsService {
     return aParts.some((part) => bParts.includes(part)) || bParts.some((part) => aParts.includes(part));
   }
 
-  async create(
+  async create(tutorId: string, dto: CreateBookingDto): Promise<{ jobId: string }> {
+    const start = new Date(dto.startDate).toISOString();
+    const end = new Date(dto.endDate).toISOString();
+
+    const jobId = `booking:${dto.caregiverId}:${start}:${end}`;
+
+    const job: Job = await this.bookingsQueue.add(
+      'create-booking',
+      { tutorId, dto },
+      {
+        jobId,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        removeOnComplete: true,
+        removeOnFail: false, // importante pra debug
+      },
+    );
+
+    return {
+      jobId: job.id!,
+    };
+  }
+
+  async createDirect(
     tutorId: string,
     createBookingDto: CreateBookingDto,
   ): Promise<BookingDocument> {
-    // Validate caregiver exists
     const caregiver = await this.usersService.findById(createBookingDto.caregiverId);
+
     if (!caregiver || caregiver.role !== 'caregiver') {
       throw new NotFoundException('Cuidador não encontrado');
     }
 
     const tutor = await this.usersService.findById(tutorId);
-    if (!tutor.location?.trim()) {
-      throw new BadRequestException('Atualize sua localização no perfil para contratar cuidadores próximos.');
-    }
 
-    if (!caregiver.location?.trim()) {
-      throw new BadRequestException('Localização do cuidador não está disponível.');
+    if (!tutor.location || !caregiver.location) {
+      throw new BadRequestException('Localização obrigatória');
     }
 
     if (!this.isSameCityOrState(tutor.location, caregiver.location)) {
-      throw new BadRequestException(
-        'Só é permitido contratar cuidadores na mesma cidade ou no mesmo estado que você.',
-      );
+      throw new BadRequestException('Cuidador fora da sua região');
     }
 
     const startDate = new Date(createBookingDto.startDate);
     const endDate = new Date(createBookingDto.endDate);
 
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new BadRequestException('Datas inválidas');
+    }
+
     if (endDate < startDate) {
-      throw new BadRequestException('A data final deve ser posterior à data inicial');
+      throw new BadRequestException('Data inválida');
     }
 
-    const totalDays = Math.max(
-      1,
-      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
-    );
+    const session = await this.bookingModel.db.startSession();
 
-    const normalizedServiceType = (createBookingDto.serviceType || '').trim();
-    if (!normalizedServiceType) {
-      throw new BadRequestException('Tipo de serviço inválido');
-    }
+    try {
+      let saved: BookingDocument;
 
-    const pet = await this.usersService.findPetById(createBookingDto.petId);
-    if (pet.userId?.toString() !== tutorId) {
-      throw new BadRequestException('O pet selecionado não pertence ao tutor logado.');
-    }
+      await session.withTransaction(async () => {
+        // 🔥 ATOMIC OVERLAP CHECK (dentro da transaction)
+        const conflict = await this.bookingModel
+          .findOne({
+            caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+            status: {
+              $in: [
+                BookingStatus.PENDING,
+                BookingStatus.CONFIRMED,
+                BookingStatus.IN_PROGRESS,
+              ],
+            },
+            $or: [
+              {
+                startDate: { $lte: endDate },
+                endDate: { $gte: startDate },
+              },
+            ],
+          })
+          .session(session)
+          .lean();
 
-    const caregiverPetTypes = Array.isArray(caregiver.petsQuantity)
-      ? caregiver.petsQuantity.map((entry: any) => entry.type)
-      : [];
+        if (conflict) {
+          throw new BadRequestException('Já existe reserva nesse período');
+        }
 
-    if (!caregiverPetTypes.includes(pet.type)) {
-      throw new BadRequestException('Este cuidador não atende o tipo de pet selecionado.');
-    }
+        const pet = await this.usersService.findPetById(createBookingDto.petId);
 
-    if (pet.type === 'dog') {
-      const dogEntry = (caregiver.petsQuantity || []).find(
-        (entry: any) => entry.type === 'dog',
-      );
-      const acceptedSizes = Array.isArray(dogEntry?.sizes) ? dogEntry.sizes : [];
+        if (pet.userId?.toString() !== tutorId) {
+          throw new BadRequestException('Pet não pertence ao tutor');
+        }
 
-      if (acceptedSizes.length === 0) {
-        throw new BadRequestException(
-          'Não foi possível prosseguir porque este cuidador não informou quais portes de cão atende. Por favor, escolha outro cuidador ou confirme se ele atende o porte do seu pet.',
+        const caregiverPets =
+          caregiver.petsQuantity?.map((p: any) => p.type) || [];
+
+        if (!caregiverPets.includes(pet.type)) {
+          throw new BadRequestException('Tipo de pet não aceito');
+        }
+
+        if (pet.type === 'dog') {
+          const dog = caregiver.petsQuantity?.find((p: any) => p.type === 'dog');
+          if (!dog?.sizes?.includes(pet.size)) {
+            throw new BadRequestException('Porte do cão não aceito');
+          }
+        }
+
+        const serviceType = createBookingDto.serviceType?.trim();
+        if (!serviceType) throw new BadRequestException('Serviço inválido');
+
+        const service = caregiver.services?.find(
+          (s: any) =>
+            s.name.toLowerCase() === serviceType.toLowerCase(),
         );
-      }
 
-      if (!acceptedSizes.includes(pet.size)) {
-        throw new BadRequestException(
-          `Este cuidador não atende cães de porte ${
-            pet.size === 'small' ? 'pequeno' : pet.size === 'medium' ? 'médio' : 'grande'
-          }. Se o seu cão for de porte diferente, procure um cuidador que aceite esse porte.`,
+        const totalDays = Math.max(
+          1,
+          Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000),
         );
-      }
+
+        const pricePerDay = service?.price ?? caregiver.price ?? 0;
+
+        const [booking] = await this.bookingModel.create(
+          [
+            {
+              tutorId: new Types.ObjectId(tutorId),
+              caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+              petId: new Types.ObjectId(createBookingDto.petId),
+              startDate,
+              endDate,
+              serviceType,
+              location: createBookingDto.location,
+              startTime: createBookingDto.startTime,
+              endTime: createBookingDto.endTime,
+              totalDays,
+              pricePerDay,
+              totalPrice: totalDays * pricePerDay,
+              notes: createBookingDto.notes,
+              paymentMethod:
+                createBookingDto.paymentMethod ?? 'pay_on_service',
+            },
+          ],
+          { session },
+        );
+
+        saved = booking;
+      });
+
+      return saved!;
+    } finally {
+      await session.endSession();
     }
-
-    const matchedService = (caregiver.services || []).find(
-      (service: { name: string; price: number; duration: string }) =>
-        service?.name?.toLowerCase() === normalizedServiceType.toLowerCase(),
-    );
-
-    const pricePerDay = matchedService?.price ?? caregiver.price ?? 0;
-    const totalPrice = totalDays * pricePerDay;
-
-    const booking = new this.bookingModel({
-      tutorId: new Types.ObjectId(tutorId),
-      caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
-      startDate,
-      endDate,
-      location: createBookingDto.location,
-      serviceType: normalizedServiceType,
-      petId: new Types.ObjectId(createBookingDto.petId),
-      startTime: createBookingDto.startTime,
-      endTime: createBookingDto.endTime,
-      totalDays,
-      pricePerDay,
-      totalPrice,
-      notes: createBookingDto.notes,
-      paymentMethod: createBookingDto.paymentMethod ?? 'pay_on_service',
-    });
-
-    return booking.save();
   }
 
   async findByTutor(tutorId: string): Promise<BookingDocument[]> {
@@ -391,10 +455,52 @@ export class BookingsService {
       },
     ]);
 
-    await this.usersService.updateCaregiverRating(
+    await this.caregiversService.updateCaregiverRating(
       caregiverId,
-      stats?.avgRating ?? 0,
-      stats?.reviewsCount ?? 0,
     );
   }
+
+  private async checkAvailability(
+    caregiverId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<boolean> {
+    const conflict = await this.bookingModel.findOne({
+      caregiverId: new Types.ObjectId(caregiverId),
+      status: {
+        $in: [
+          BookingStatus.PENDING,
+          BookingStatus.CONFIRMED,
+          BookingStatus.IN_PROGRESS,
+        ],
+      },
+      $or: [
+        {
+          startDate: { $lte: endDate },
+          endDate: { $gte: startDate },
+        },
+      ],
+    });
+
+    return !conflict;
+  }
+
+  private async blockCalendarSlot(
+    caregiverId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<void> {
+    const key = `calendar:${caregiverId}`;
+
+    const existing = await this.redisService.get(key);
+    const calendar = existing ? JSON.parse(existing) : [];
+
+    calendar.push({
+      startDate,
+      endDate,
+    });
+
+    await this.redisService.set(key, JSON.stringify(calendar), 60 * 60 * 24);
+  }
 }
+

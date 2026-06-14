@@ -97,3 +97,20 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+UserSchema.index({
+  role: 1,
+  isActive: 1,
+});
+
+UserSchema.index({
+  role: 1,
+  isActive: 1,
+  createdAt: -1,
+});
+
+UserSchema.index({
+  role: 1,
+  isActive: 1,
+  rating: -1,
+});

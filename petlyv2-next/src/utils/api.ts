@@ -200,7 +200,11 @@ export async function apiUpdateProfile(id: string, payload: any): Promise<any> {
   });
 }
 
-export async function apiGetCaregivers(filters?: {
+export async function apiGetCaregivers(): Promise<any[]> {
+  return request('/caregivers');
+}
+
+export async function apiGetCaregiversFiltered(filters?: {
   type?: string;
   location?: string;
   name?: string;
@@ -215,11 +219,11 @@ export async function apiGetCaregivers(filters?: {
   if (filters?.sortBy) params.set('sortBy', filters.sortBy);
 
   const query = params.toString();
-  return request(`/users/caregivers${query ? `?${query}` : ''}`);
+  return request(`/caregivers/filtered${query ? `?${query}` : ''}`);
 }
 
 export async function apiGetCaregiver(id: string): Promise<any> {
-  return request(`/users/${id}`);
+  return request(`/caregivers/${id}`);
 }
 
 export enum ServiceType {
@@ -347,16 +351,26 @@ export interface CreateBookingPayload {
   paymentMethod?: string;
 }
 
+export interface CreateBookingResponse {
+  jobId: string;
+  message: string;
+}
+
 export interface SubmitBookingReviewPayload {
   rating: number;
   comment?: string;
 }
 
-export async function apiCreateBooking(payload: CreateBookingPayload): Promise<any> {
-  return request('/bookings', {
+export async function apiCreateBooking(payload: CreateBookingPayload) {
+  const res = await request<{ jobId: string }>('/bookings', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+
+  return {
+    jobId: res.jobId,
+    status: 'queued',
+  };
 }
 
 export async function apiGetMyBookings(): Promise<any[]> {

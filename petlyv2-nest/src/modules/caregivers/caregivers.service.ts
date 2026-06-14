@@ -1,5 +1,5 @@
 import { Model, Types } from "mongoose";
-import { Caregiver, CaregiverDocument } from "./schemas/caregiver.schema";
+import { CaregiverProfile, CaregiverProfileDocument } from "./schemas/caregiver.schema";
 import { InjectModel } from "@nestjs/mongoose";
 import {
   BadRequestException,
@@ -16,6 +16,11 @@ import { UpdateServiceDto } from "./dto/update-services.dto";
 import * as bcrypt from "bcrypt";
 import { AvailabilityDto } from "./dto/availability.dto";
 import { Booking, BookingDocument } from "@modules/bookings/schemas/booking.schema";
+import { User, UserDocument, UserRole } from "@modules/users/schemas/user.schema";
+import { CaregiverAssembler } from "./asssembler/caregiver.assembler";
+import { CaregiverProfileLean } from "./lean/caregiver.lean";
+import { UserLean } from "@modules/users/lean/user.lean";
+import { SortOrder } from 'mongoose';
 
 const SERVICE_DEFAULTS: Record<
   ServiceDto["type"],
@@ -46,257 +51,261 @@ const SERVICE_DEFAULTS: Record<
 @Injectable()
 export class CaregiversService {
   constructor(
-    @InjectModel(Caregiver.name)
-    private caregiverModel: Model<CaregiverDocument>,
-    @InjectModel(Booking.name)
-    private reviewModel: Model<BookingDocument>,
-  ) {}
+  @InjectModel(CaregiverProfile.name)
+  private caregiverModel: Model<CaregiverProfileDocument>,
 
-  // ✅ aplica defaults de serviço
-  private mapServices(services?: ServiceDto[]) {
-    if (!services) return [];
+  @InjectModel(User.name)
+  private userModel: Model<UserDocument>,
 
-    return services.map((service) => {
-      const base = SERVICE_DEFAULTS[service.type];
+  @InjectModel(Booking.name)
+  private reviewModel: Model<BookingDocument>,
 
-      return {
-        ...service,
-        name: base.name,
-        description: base.description,
-      };
-    });
-  }
+  private readonly assembler: CaregiverAssembler,
 
-  async create(
-    createCaregiverDto: CreateCaregiverDto,
-  ): Promise<CaregiverDocument> {
-    // Hash the password before saving
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(createCaregiverDto.password, salt);
+) {}
 
-    const createdCaregiver = new this.caregiverModel({
-      ...createCaregiverDto,
+  // --------------------------
+  // CREATE
+  // --------------------------
+  async create(dto: CreateCaregiverDto) {
+    const existing = await this.userModel.findOne({ email: dto.email });
+
+    if (existing) {
+      throw new BadRequestException('Email já cadastrado');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const user = await this.userModel.create({
+      name: dto.name,
+      email: dto.email,
       password: hashedPassword,
+      role: UserRole.CAREGIVER,
     });
-    return createdCaregiver.save();
+
+    const profile = await this.caregiverModel.create({
+      userId: user._id,
+      cpf: dto.cpf,
+      bio: dto.bio,
+      specialties: dto.specialties ?? [],
+      petTypes: dto.petTypes ?? [],
+      petsQuantity: dto.petsQuantity ?? [],
+      services: this.mapServices(dto.services),
+      availability: dto.availability ?? [],
+      rating: 0,
+      reviewsCount: 0,
+      price: 0,
+      minPrice: 0,
+      maxPrice: 0,
+    });
+
+    return this.assemble(profile);
   }
 
-  async findOne(id: string): Promise<CaregiverDocument> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
+  // --------------------------
+  // FIND ONE
+  // --------------------------
+async findOne(profileId: string) {
+  this.validateId(profileId);
 
-    const caregiver = await this.caregiverModel.findById(id).select('-password -cpf').exec();
+  const profile = await this.caregiverModel
+    .findById(profileId)
+    .lean<CaregiverProfileLean>();
 
-    if (!caregiver) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
+  if (!profile) throw new NotFoundException();
 
-    return caregiver;
-  }
+  const user = await this.userModel
+    .findById(profile.userId)
+    .select('name email avatar location isActive role')
+    .lean<UserLean>();
 
-  async findAll(): Promise<CaregiverDocument[]> {
-    return this.caregiverModel.find({ isActive: true }).select('-password -cpf').exec();
-  }
+  return this.assemble(profile, user);
+}
 
-  /**
-   * Filtered search - matches frontend /cuidadores filters:
-   * - type (dog, cat, bird, other)
-   * - location (partial match, case-insensitive)
-   * - maxPrice
-   * - sortBy (price_asc, price_desc, rating, relevance)
-   * - specialty
-   */
+  // --------------------------
+  // FIND ALL
+  // --------------------------
+  async findAll() {
+  const profiles = await this.caregiverModel
+    .find()
+    .lean<CaregiverProfileLean[]>();
+
+  const userIds = profiles.map(p => p.userId);
+
+  const users = await this.userModel
+    .find({ _id: { $in: userIds } })
+    .select('name email avatar location isActive role')
+    .lean<UserLean[]>();
+
+  const userMap = new Map(
+    users.map(u => [u._id.toString(), u]),
+  );
+
+  return this.assembleMany(profiles, userMap);
+}
+
+  // --------------------------
+  // FILTERED SEARCH
+  // --------------------------
   async findFiltered(filters: {
-    type?: CaregiverType;
+    type?: string;
     location?: string;
+    name?: string;
     maxPrice?: number;
     sortBy?: string;
-    specialty?: string;
-    name?: string;
-  }): Promise<CaregiverDocument[]> {
-    const query: any = { isActive: { $ne: false } };
+  }) {
+    const query: any = {};
 
     if (filters.type) {
-      query.type = filters.type;
-    }
-
-    if (filters.location) {
-      // Normalize for accent-insensitive search
-      query.location = { $regex: filters.location, $options: 'i' };
+      query.petTypes = {
+        $in: [filters.type],
+      };
     }
 
     if (filters.maxPrice) {
-      query.price = { $lte: filters.maxPrice };
+      query.minPrice = { $lte: filters.maxPrice };
     }
 
-    if (filters.specialty) {
-      query.specialties = { $regex: filters.specialty, $options: 'i' };
-    }
+    const userQuery: any = {};
 
     if (filters.name) {
-      query.name = { $regex: filters.name, $options: 'i' };
+      userQuery.name = {
+        $regex: filters.name,
+        $options: 'i',
+      };
     }
 
-    let sortOption: any = {};
-    switch (filters.sortBy) {
-      case 'price_asc':
-        sortOption = { price: 1 };
-        break;
-      case 'price_desc':
-        sortOption = { price: -1 };
-        break;
-      case 'rating':
-        sortOption = { rating: -1 };
-        break;
-      default:
-        sortOption = { createdAt: -1 };
+    if (filters.location) {
+      userQuery.location = {
+        $regex: filters.location,
+        $options: 'i',
+      };
     }
 
-    return this.caregiverModel
+    if (Object.keys(userQuery).length) {
+      const users = await this.userModel
+        .find(userQuery)
+        .select('_id')
+        .lean();
+
+      query.userId = {
+        $in: users.map(u => u._id),
+      };
+    }
+
+    const sort: Record<string, SortOrder> =
+      filters.sortBy === 'rating'
+        ? { rating: -1 }
+        : filters.sortBy === 'price_asc'
+        ? { minPrice: 1 }
+        : filters.sortBy === 'price_desc'
+        ? { minPrice: -1 }
+        : { createdAt: -1 };
+
+    const profiles = await this.caregiverModel
       .find(query)
-      .select('-password -cpf')
-      .sort(sortOption)
-      .exec();
-  }
+      .sort(sort)
+      .lean<CaregiverProfileLean[]>();
 
-  async findByType(type: CaregiverType): Promise<CaregiverDocument[]> {
-    return this.caregiverModel.find({ type, isActive: { $ne: false } }).select('-password -cpf').exec();
-  }
+    const userIds = profiles.map(p => p.userId);
 
-  async findBySpecialty(
-    specialty: string,
-  ): Promise<CaregiverDocument[]> {
-    return this.caregiverModel.find({ specialties: specialty, isActive: { $ne: false } }).select('-password -cpf').exec();
-  }
+    const users = await this.userModel
+      .find({ _id: { $in: userIds } })
+      .select('name email avatar location isActive role')
+      .lean<UserLean[]>();
 
-  async update(
-    id: string,
-    updateCaregiverDto: UpdateCaregiverDto,
-  ): Promise<CaregiverDocument> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
-
-    const { services, petQuantities, availability, ...rest } = updateCaregiverDto;
-
-    const updateData: any = { ...rest };
-    if (services) {
-      updateData.services = services;
-    }
-    if (petQuantities) {
-      updateData.petsQuantity = petQuantities;
-    }
-    if (availability) {
-      updateData.availability = availability;
-    } 
-
-    if (Object.keys(updateData).length > 0) {
-      const result = await this.caregiverModel.updateOne(
-        { _id: id },
-        { $set: updateData },
-      );
-
-      if (result.matchedCount === 0) {
-        throw new NotFoundException("Caregiver não encontrado");
-      }
-    }
-
-    if (!services) {
-      const caregiver = await this.caregiverModel.findById(id).exec();
-      if (!caregiver) {
-        throw new NotFoundException("Caregiver não encontrado");
-      }
-      return caregiver;
-    }
-
-    const types = services.map((s) => s.type);
-    const unique = new Set(types);
-
-    if (unique.size !== types.length) {
-      throw new BadRequestException(
-        "Serviços duplicados não são permitidos",
-      );
-    }
-
-    const mappedServices = this.mapServices(services);
-
-    const pullResult = await this.caregiverModel.updateOne(
-      { _id: id },
-      {
-        $pull: {
-          services: { type: { $in: types } },
-        },
-      },
+    const userMap = new Map(
+      users.map(u => [u._id.toString(), u]),
     );
 
-    if (pullResult.matchedCount === 0) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
+    return this.assembleMany(profiles, userMap);
+  }
+  // --------------------------
+  // UPDATE PROFILE (ONLY FIELDS)
+  // --------------------------
+  async updateProfile(id: string, dto: UpdateCaregiverDto) {
+    this.validateId(id);
 
-    await this.caregiverModel.updateOne(
-      { _id: id },
+    const updated = await this.caregiverModel.findByIdAndUpdate(
+      id,
       {
-        $push: {
-          services: {
-            $each: mappedServices,
-          },
+        $set: {
+          bio: dto.bio,
+          specialties: dto.specialties,
+          petTypes: dto.petTypes,
+          petsQuantity: dto.petQuantities,
+          availability: dto.availability,
         },
       },
-    );
-
-    const updatedCaregiver = await this.caregiverModel
-      .findById(id)
-      .exec();
-
-    if (!updatedCaregiver) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
-
-    return updatedCaregiver;
-  }
-
-  async updateService(
-    id: string,
-    type: ServiceDto["type"],
-    dto: UpdateServiceDto,
-  ): Promise<CaregiverDocument> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
-
-    const base = SERVICE_DEFAULTS[type];
-
-    if (!base) {
-      throw new BadRequestException("Tipo de serviço inválido");
-    }
-
-    const updateData: Record<string, unknown> = {
-      "services.$.name": base.name,
-      "services.$.description": base.description,
-    };
-
-    if (dto.price !== undefined) {
-      updateData["services.$.price"] = dto.price;
-    }
-
-    const updated = await this.caregiverModel.findOneAndUpdate(
-      {
-        _id: id,
-        "services.type": type,
-      },
-      { $set: updateData },
       { new: true },
     );
 
-    if (updated) return updated;
+    if (!updated) {
+      throw new NotFoundException('Caregiver não encontrado');
+    }
 
-    const caregiverExists = await this.caregiverModel.exists({
-      _id: id,
-    });
+    return updated;
+  }
 
-    if (!caregiverExists) {
-      throw new NotFoundException("Caregiver não encontrado");
+  // --------------------------
+  // UPDATE SERVICES (FULL REPLACE)
+  // --------------------------
+  async updateServices(id: string, services: ServiceDto[]) {
+    this.validateId(id);
+
+    const mapped = this.mapServices(services);
+
+    const prices = mapped.map(s => Number(s.price)).filter(Boolean);
+
+    const minPrice = prices.length ? Math.min(...prices) : 0;
+    const maxPrice = prices.length ? Math.max(...prices) : 0;
+
+    const updated = await this.caregiverModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          services: mapped,
+          minPrice,
+          maxPrice,
+          price: minPrice,
+        },
+      },
+      { new: true },
+    );
+
+    if (!updated) throw new NotFoundException();
+
+    return updated;
+  }
+
+  // --------------------------
+  // UPDATE SINGLE SERVICE (UPSERT)
+  // --------------------------
+  async updateService(id: string, type: ServiceDto['type'], dto: UpdateServiceDto) {
+    this.validateId(id);
+
+    const base = SERVICE_DEFAULTS[type];
+
+    const updated = await this.caregiverModel.findOneAndUpdate(
+      { _id: id, 'services.type': type },
+      {
+        $set: {
+          'services.$.name': base.name,
+          'services.$.description': base.description,
+          ...(dto.price !== undefined && {
+            'services.$.price': dto.price,
+          }),
+        },
+      },
+      { new: true },
+    );
+
+    if (updated) {
+      return this.recalculatePrices(updated);
+    }
+
+    if (!(await this.caregiverModel.exists({ _id: id }))) {
+      throw new NotFoundException();
     }
 
     const newService = {
@@ -308,108 +317,137 @@ export class CaregiversService {
 
     const created = await this.caregiverModel.findByIdAndUpdate(
       id,
-      {
-        $push: { services: newService },
-      },
+      { $push: { services: newService } },
       { new: true },
     );
 
-    if (!created) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
-
-    return created;
+    return this.recalculatePrices(created!);
   }
-  
-  async addAvailability(id: string, availability: AvailabilityDto): Promise<CaregiverDocument> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
 
-    const caregiver = await this.caregiverModel.findById(id).exec();
-    if (!caregiver) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
+  // --------------------------
+  // AVAILABILITY (PUSH)
+  // --------------------------
+  async addAvailability(id: string, dto: AvailabilityDto) {
+    this.validateId(id);
 
-    const newAvailability = {
-      ...availability,
-      service: availability.service,
-      serviceHours: availability.serviceHours,
-    };
-
-    const updatedCaregiver = await this.caregiverModel.findByIdAndUpdate(
+    return this.caregiverModel.findByIdAndUpdate(
       id,
-      {
-        $push: { availability: newAvailability },
-      },
+      { $push: { availability: dto } },
       { new: true },
     );
-
-    if (!updatedCaregiver) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
-
-    return updatedCaregiver;
   }
 
-  async updateAvailability(id: string, availability: AvailabilityDto): Promise<CaregiverDocument> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
+  async updateAvailability(id: string, dto: AvailabilityDto[]) {
+    this.validateId(id);
 
-    const caregiver = await this.caregiverModel.findById(id).exec();
-    if (!caregiver) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
-
-    const updatedCaregiver = await this.caregiverModel.findByIdAndUpdate(
+    return this.caregiverModel.findByIdAndUpdate(
       id,
-      {
-        $set: { availability },
-      },
+      { $set: { availability: dto } },
       { new: true },
     );
-
-    if (!updatedCaregiver) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
-
-    return updatedCaregiver;
   }
 
-  async remove(id: string): Promise<void> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
+  // --------------------------
+  // REMOVE
+  // --------------------------
+  async remove(id: string) {
+    this.validateId(id);
 
-    const result = await this.caregiverModel
-      .findByIdAndDelete(id)
-      .exec();
+    const profile = await this.caregiverModel.findById(id);
+    if (!profile) throw new NotFoundException();
 
-    if (!result) {
-      throw new NotFoundException("Caregiver não encontrado");
-    }
+    await this.userModel.findByIdAndUpdate(profile.userId, {
+      role: UserRole.TUTOR,
+    });
+
+    await this.caregiverModel.deleteOne({ _id: id });
   }
 
-  async findMyReviews(id: string) {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException("ID inválido");
-    }
+  // --------------------------
+  // REVIEWS
+  // --------------------------
+  async findMyReviews(caregiverId: string) {
+    this.validateId(caregiverId);
 
-    const bookingsWithReviews = await this.reviewModel
-      .find({ caregiverId: new Types.ObjectId(id), review: { $exists: true, $ne: null } })
-      .select('review tutorId')
+    const bookings = await this.reviewModel
+      .find({
+        caregiverId,
+        review: { $exists: true },
+      })
       .populate('tutorId', 'name')
-      .lean()
-      .exec();
+      .lean();
 
-    // Map to return just the review data with additional context
-    return bookingsWithReviews
-      .filter(booking => booking.review)
-      .map((booking: any) => ({
-        ...booking.review,
-        tutorId: booking.tutorId?._id?.toString() || booking.tutorId?.toString(),
-        tutorName: booking.tutorId?.name || 'Cliente',
-      }));
+    return bookings.map((b: any) => ({
+      ...b.review,
+      tutorName: b.tutorId?.name,
+    }));
+  }
+
+  async updateCaregiverRating(caregiverId: string) {
+    const reviews = await this.reviewModel
+      .find({
+        caregiverId,
+        review: { $exists: true },
+      })
+      .lean();
+
+    const ratings = reviews.map(r => r.review.rating).filter(Boolean);
+
+    const rating = ratings.length
+      ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
+      : 0;
+
+    await this.caregiverModel.findByIdAndUpdate(caregiverId, {
+      rating,
+      reviewsCount: ratings.length,
+    });
+  }
+  // --------------------------
+  // HELPERS
+  // --------------------------
+  private mapServices(services?: ServiceDto[]) {
+    if (!services) return [];
+
+    return services.map(s => ({
+      ...s,
+      name: SERVICE_DEFAULTS[s.type].name,
+      description: SERVICE_DEFAULTS[s.type].description,
+    }));
+  }
+
+  private recalculatePrices(profile: CaregiverProfileDocument) {
+    const prices = profile.services
+      .map(s => Number(s.price))
+      .filter(p => !isNaN(p));
+
+    profile.minPrice = prices.length ? Math.min(...prices) : 0;
+    profile.maxPrice = prices.length ? Math.max(...prices) : 0;
+    profile.price = profile.minPrice;
+
+    return profile.save();
+  }
+
+  private assemble(profile, user?) {
+  return {
+    id: profile._id,
+    user,
+    profile,
+  };
+}
+
+  private assembleMany(profiles, userMap: Map<string, any>) {
+  return profiles
+    .map(p => ({
+      id: p._id,
+      user: userMap.get(p.userId.toString()),
+      profile: p,
+    }))
+    .filter(item => item.user);
+}
+
+  private validateId(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('ID inválido');
+    }
   }
 }

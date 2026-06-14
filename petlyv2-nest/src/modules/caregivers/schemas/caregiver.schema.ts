@@ -1,75 +1,129 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Schema as MongooseSchema } from 'mongoose';
-import { Service, ServiceSchema, ServiceType } from './services.schema';
-import { PetsQuantityDto } from '../dto/pets-quantity.dto';
+import { Document, Types, Schema as MongooseSchema } from 'mongoose';
+import { User } from '../../users/schemas/user.schema';
+import { ServiceType } from '../dto/service-dto';
 
-export enum CaregiverType {
-  DOG = 'dog',
-  CAT = 'cat',
-  BIRD = 'bird',
-  OTHER = 'other',
-}
+export type CaregiverProfileDocument =
+  CaregiverProfile & Document;
 
-const CaregiverPetsQuantitySchema = new MongooseSchema(
+const PetsQuantitySchema = new MongooseSchema(
   {
-    type: { type: String, enum: Object.values(CaregiverType), required: true },
-    quantity: { type: Number, required: true },
-    sizes: { type: [String], default: [] },
+    type: String,
+    quantity: Number,
+    sizes: [String],
   },
   { _id: false },
 );
 
-export type CaregiverDocument = Caregiver & Document;
-
 @Schema({ timestamps: true })
-export class Caregiver {
-  @Prop({ required: true })
-  name!: string;
+export class CaregiverProfile {
+  @Prop({
+    type: Types.ObjectId,
+    ref: User.name,
+    required: true,
+    unique: true,
+  })
+  userId!: Types.ObjectId;
 
-  @Prop({ required: true, unique: true })
-  email!: string;
-
-  @Prop({ required: true })
-  password!: string;
-
-  @Prop({ unique: true, sparse: true })
+  @Prop()
   cpf?: string;
 
-  @Prop({ required: true })
-  location!: string;
+  @Prop()
+  bio?: string;
 
   @Prop({ type: [String], default: [] })
   specialties!: string[];
 
-  @Prop()
-  bio!: string;
+  @Prop({ type: [String], default: [] })
+  petTypes!: string[];
 
-  @Prop()
-  avatar?: string;
+  @Prop({
+    type: [PetsQuantitySchema],
+    default: [],
+  })
+  petsQuantity!: {
+    type: string;
+    quantity: number;
+    sizes?: string[];
+  }[];
 
-  @Prop({ enum: CaregiverType, required: true })
-  type!: CaregiverType;
-
-  @Prop({ type: [CaregiverPetsQuantitySchema], default: [] })
-  petsQuantity!: { type: string, quantity: number; sizes?: string[] }[];
-
-  @Prop({ default: 0 })
+  @Prop({
+    default: 0,
+  })
   price!: number;
+
+  @Prop({
+    default: 0,
+  })
+  minPrice!: number;
+
+  @Prop({
+    default: 0,
+  })
+  maxPrice!: number;
+
+  @Prop({
+    type: [
+      {
+        type: {
+          type: String,
+          enum: Object.values(ServiceType),
+        },
+        name: String,
+        price: Number,
+        duration: String,
+      },
+    ],
+    default: [],
+  })
+  services!: {
+    type: ServiceType;
+    name: string;
+    price: number;
+    duration: string;
+  }[];
+
+  @Prop({
+    type: [
+      {
+        service: String,
+        availableDays: [String],
+        serviceHours: [String],
+      },
+    ],
+    default: [],
+  })
+  availability!: {
+    service: ServiceType;
+    availableDays: string[];
+    serviceHours: string[];
+  }[];
 
   @Prop({ default: 0 })
   rating!: number;
 
   @Prop({ default: 0 })
   reviewsCount!: number;
-
-  @Prop({ type: [ServiceSchema], default: [] })
-  services!: Service[];
-
-  @Prop({ type: [{ service: String, availableDays: [String], serviceHours: [String] }], default: [] })
-  availability!: { service: ServiceType, availableDays: string[], serviceHours: string[] }[];
-
-  @Prop({ default: true })
-  isActive!: boolean;
 }
 
-export const CaregiverSchema = SchemaFactory.createForClass(Caregiver);
+export const CaregiverProfileSchema =
+  SchemaFactory.createForClass(
+    CaregiverProfile,
+  );
+
+CaregiverProfileSchema.index({
+  minPrice: 1,
+});
+
+CaregiverProfileSchema.index({
+  rating: -1,
+});
+
+CaregiverProfileSchema.index({
+  specialties: 1,
+});
+
+CaregiverProfileSchema.index({
+  rating: -1,
+  minPrice: 1,
+});

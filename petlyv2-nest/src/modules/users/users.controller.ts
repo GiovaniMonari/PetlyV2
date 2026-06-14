@@ -22,27 +22,6 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   /**
-   * GET /api/users/caregivers
-   * Public - Lista cuidadores com filtros (usado pela página /cuidadores)
-   */
-  @Get('caregivers')
-  findCaregivers(
-    @Query('type') type?: string,
-    @Query('location') location?: string,
-    @Query('maxPrice') maxPrice?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('name') name?: string,
-  ) {
-    return this.usersService.findCaregivers({
-      type,
-      location,
-      maxPrice: maxPrice ? Number(maxPrice) : undefined,
-      sortBy,
-      name,
-    });
-  }
-
-  /**
    * GET /api/users/me
    * Protected - Retorna o perfil do usuário autenticado
    */

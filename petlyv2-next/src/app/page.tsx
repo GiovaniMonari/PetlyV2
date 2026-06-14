@@ -6,7 +6,7 @@ import Hero from '@/components/Hero';
 import CaregiverCard from '@/components/CaregiverCard';
 import Footer from '@/components/Footer';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
-import { apiGetCaregivers, apiGetProfile, getUser } from '@/utils/api';
+import { apiGetCaregivers, apiGetCaregiversFiltered, apiGetProfile, getUser } from '@/utils/api';
 import FilterCards from '@/components/FilterBar';
 import { useRouter } from 'next/navigation';
 
@@ -53,7 +53,7 @@ export default function HomePage() {
     const fetchCaregivers = async () => {
       setIsLoading(true);
       try {
-        const data = await apiGetCaregivers({
+        const data = await apiGetCaregiversFiltered({
           type: selectedType,
           location: effectiveLocation,
         });

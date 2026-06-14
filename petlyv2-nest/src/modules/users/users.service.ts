@@ -73,122 +73,32 @@ export class UsersService {
     return user;
   }
 
-  async findCaregivers(filters: {
-    type?: string;
-    location?: string;
-    maxPrice?: number;
-    sortBy?: string;
-    name?: string;
-  }): Promise<UserDocument[]> {
-    const query: any = { 
-      role: 'caregiver', 
-      isActive: true,
-      services: { $exists: true, $not: { $size: 0 } }
-    };
-
-    if (filters.type && filters.type !== 'all') {
-      query['petsQuantity.type'] = filters.type;
-    }
-
-    if (filters.location) {
-      query.location = { $regex: filters.location, $options: 'i' };
-    }
-
-    if (filters.name) {
-      query.name = { $regex: filters.name, $options: 'i' };
-    }
-
-    if (filters.maxPrice) {
-      query.price = { $lte: filters.maxPrice };
-    }
-
-    let sortOption: any = {};
-    switch (filters.sortBy) {
-      case 'price_asc':
-        sortOption = { price: 1 };
-        break;
-      case 'price_desc':
-        sortOption = { price: -1 };
-        break;
-      case 'rating':
-        sortOption = { rating: -1 };
-        break;
-      default:
-        sortOption = { createdAt: -1 };
-    }
-
-    const caregivers = await this.userModel
-      .find(query)
-      .select('-password -cpf')
-      .sort(sortOption)
-      .exec();
-
-    return caregivers.map((c) => {
-      const obj = c.toObject() as any;
-      
-      // Get all prices from services, filtering out invalid ones
-      const prices = (obj.services || [])
-        .map((s: any) => Number(s.price))
-        .filter((p: number) => !isNaN(p));
-
-      if (prices.length > 0) {
-        obj.minPrice = Math.min(...prices);
-        obj.maxPrice = Math.max(...prices);
-        // Update the main price field to reflect the minimum price for sorting/display
-        obj.price = obj.minPrice;
-      } else {
-        // Fallback for cases where services have no valid prices or no services exist
-        const basePrice = Number(obj.price) || 0;
-        obj.minPrice = basePrice;
-        obj.maxPrice = basePrice;
-        obj.price = basePrice;
-      }
-
-      return obj;
-    }) as any;
-  }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<UserDocument> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('ID inválido');
     }
 
-    // If services are updated, calculate the min and max prices
-    if (updateUserDto.services && updateUserDto.services.length > 0) {
-      // Remove _id from services if present
-      updateUserDto.services = updateUserDto.services.map((s: any) => {
-        const { _id, ...rest } = s;
-        return rest;
-      });
-
-      const prices = updateUserDto.services.map(s => s.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      (updateUserDto as any).price = minPrice;
-      (updateUserDto as any).minPrice = minPrice;
-      (updateUserDto as any).maxPrice = maxPrice;
-    } else if (updateUserDto.services && updateUserDto.services.length === 0) {
-      (updateUserDto as any).price = 0;
-      (updateUserDto as any).minPrice = 0;
-      (updateUserDto as any).maxPrice = 0;
-    }
-
     const { petQuantities, availability, ...restUpdate } = updateUserDto;
+
     const finalUpdate: any = { ...restUpdate };
 
     if (petQuantities) {
       finalUpdate.petsQuantity = petQuantities.map((p: any) => {
         const { _id, ...rest } = p;
+
         if (rest.type === 'dog') {
           if (!Array.isArray(rest.sizes) || rest.sizes.length === 0) {
             throw new BadRequestException(
-              'Para cuidadores de cães, informe ao menos um porte aceito (small, medium ou large).',
+              'Informe ao menos um porte aceito (small, medium ou large).',
             );
           }
+
           rest.sizes = Array.from(new Set(rest.sizes));
         } else {
           delete rest.sizes;
         }
+
         return rest;
       });
     }
@@ -209,10 +119,7 @@ export class UsersService {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-
-    await this.cacheService.del(
-      `user-profile:${id}`,
-    );
+    await this.cacheService.del(`user-profile:${id}`);
 
     return user;
   }
@@ -239,43 +146,6 @@ export class UsersService {
     }
   }
 
-  async updateCaregiverRating(
-    caregiverId: string,
-    rating: number,
-    reviewsCount: number,
-  ): Promise<void> {
-    if (!Types.ObjectId.isValid(caregiverId)) {
-      throw new NotFoundException('ID inválido');
-    }
-
-    const updated = await this.userModel
-      .findByIdAndUpdate(
-        caregiverId,
-        {
-          $set: {
-            rating: Number(rating.toFixed(1)),
-            reviewsCount,
-          },
-        },
-        { new: true },
-      )
-      .exec();
-
-    if (!updated) {
-      throw new NotFoundException('Cuidador não encontrado');
-    }
-  }
-
-  async remove(id: string): Promise<void> {
-    if (!Types.ObjectId.isValid(id)) {
-      throw new NotFoundException('ID inválido');
-    }
-
-    const result = await this.userModel.findByIdAndDelete(id).exec();
-    if (!result) {
-      throw new NotFoundException('Usuário não encontrado');
-    }
-  }
 
   async uploadAvatar(userId: string, file: Express.Multer.File): Promise<UserDocument> {
     const user = await this.findById(userId);
@@ -443,5 +313,23 @@ export class UsersService {
     }
 
     return pet;
+  }
+
+  async remove(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('ID inválido');
+    }
+
+    const user = await this.userModel.findByIdAndDelete(id).exec();
+
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    await this.cacheService.del(
+      `user-profile:${id}`,
+    );
+
+    return { message: 'Usuário removido com sucesso' };
   }
 }

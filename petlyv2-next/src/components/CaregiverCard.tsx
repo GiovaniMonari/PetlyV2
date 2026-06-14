@@ -39,7 +39,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
 
     try {
       const currentlyFavorite = isFavorite(caregiver.id);
-      await toggleFavorite(caregiver.id);
+      await toggleFavorite(caregiver.user._id || caregiver.id);
       toast.success(currentlyFavorite ? 'Removido dos favoritos' : 'Adicionado aos favoritos');
     } catch (error) {
       toast.error('Erro ao atualizar favoritos');
@@ -53,24 +53,24 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
     >
       {/* Image Container */}
       <div className="relative h-56 overflow-hidden bg-black/40 flex items-center justify-center">
-        {caregiver.avatar ? (
+        {caregiver.user?.avatar ? (
           <Image
-            src={caregiver.avatar}
-            alt={caregiver.name}
+            src={caregiver.user.avatar}
+            alt={caregiver.user.name}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-110"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
         ) : (
           <div className="w-full h-full bg-gray-800 flex items-center justify-center group-hover:bg-gray-700 transition-colors">
-            <span className="text-gray-500 font-bold text-4xl uppercase">{caregiver.name.charAt(0)}</span>
+            <span className="text-gray-500 font-bold text-4xl uppercase">{caregiver.user?.name}</span>
           </div>
         )}
         
         {/* Rating Badge */}
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-xs font-semibold text-white border border-white/20 flex items-center gap-1 shadow-lg">
           <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-          {caregiver.rating}
+          {caregiver.profile?.rating}
         </div>
 
         {/* Favorite Button */}
@@ -81,7 +81,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
           >
             <Heart 
               className={`w-4 h-4 transition-all ${
-                isFavorite(caregiver.id) 
+                isFavorite(caregiver.user?._id || caregiver.id) 
                   ? 'text-red-500 fill-red-500 scale-110' 
                   : 'text-white group-hover/fav:text-red-400'
               }`} 
@@ -95,21 +95,21 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
         
         {/* Name and Location */}
         <h3 className="text-base font-bold text-white mb-1">
-          {caregiver.name}
+          {caregiver.user?.name}
         </h3>
         <div className="flex items-center gap-1 text-xs text-gray-400 mb-3">
           <MapPin className="w-3 h-3" />
-          {caregiver.location}
+          {caregiver.user?.location}
         </div>
 
         {/* Bio */}
         <p className="text-xs text-gray-400 line-clamp-2 mb-3 flex-1">
-          {caregiver.bio}
+          {caregiver.profile?.bio}
         </p>
 
         {/* Specialties */}
         <div className="mb-4 flex flex-wrap gap-1">
-          {caregiver.specialties.slice(0, 2).map((s: string, idx: number) => (
+          {caregiver.profile?.specialties?.slice(0, 2).map((s: string, idx: number) => (
             <span key={idx} className="bg-white/10 text-gray-300 text-xs font-semibold px-2 py-1 rounded border border-white/5">
               {s}
             </span>
@@ -120,7 +120,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
         <div className="mb-4">
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Cuida de:</p>
           <div className="flex flex-wrap gap-3 items-center">
-            {(caregiver.petsQuantity || []).map((p: any) => {
+            {(caregiver.profile?.petsQuantity || []).map((p: any) => {
               const sizeInfo = p.type === 'dog'
                 ? Array.isArray(p.sizes) && p.sizes.length > 0
                   ? ` - ${p.sizes.map((size: string) => size === 'small' ? 'Pequeno' : size === 'medium' ? 'Médio' : 'Grande').join(', ')}`
@@ -141,7 +141,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
                 </div>
               );
             })}
-            {(!caregiver.petsQuantity || caregiver.petsQuantity.length === 0) && (
+            {(!caregiver.profile?.petsQuantity || caregiver.profile?.petsQuantity.length === 0) && (
               <span className="text-xs text-gray-500 italic">Informação não disponível</span>
             )}
           </div>
@@ -153,9 +153,9 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
             <p className="text-xs text-gray-400 font-medium">Serviços a partir de</p>
             <p className="text-base font-bold text-white">
               R$ {(
-                Number(caregiver.minPrice) || 
-                Number(caregiver.price) || 
-                Number(caregiver.services?.[0]?.price) || 
+                Number(caregiver.profile?.minPrice) || 
+                Number(caregiver.profile?.price) || 
+                Number(caregiver.profile?.services?.[0]?.price) || 
                 0
               ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>

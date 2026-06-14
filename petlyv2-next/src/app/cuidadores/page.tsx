@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CaregiverCard from '@/components/CaregiverCard';
 import BecomeCaregiverModal from '@/components/BecomeCaregiverModal';
-import { apiGetCaregivers, apiGetProfile, getUser } from '@/utils/api';
+import { apiGetCaregivers, apiGetCaregiversFiltered, apiGetProfile, getUser } from '@/utils/api';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Search,
@@ -96,7 +96,7 @@ function CuidadoresPageContent() {
     const fetchCaregivers = async () => {
       setIsLoading(true);
       try {
-        const data = await apiGetCaregivers({
+        const data = await apiGetCaregiversFiltered({
           type: selectedType,
           location: effectiveLocation,
           name: debouncedName,
@@ -340,7 +340,7 @@ function CuidadoresPageContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {dbCaregivers.map((caregiver) => (
                 <div key={caregiver._id || caregiver.id}>
-                  <CaregiverCard caregiver={{...caregiver, id: caregiver._id || caregiver.id}} />
+                  <CaregiverCard caregiver={caregiver} />
                 </div>
               ))}
             </div>
