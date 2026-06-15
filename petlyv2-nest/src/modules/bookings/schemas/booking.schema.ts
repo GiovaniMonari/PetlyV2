@@ -11,6 +11,7 @@ export enum BookingStatus {
   COMPLETED = 'completed',
 }
 
+@Schema()
 export class BookingReview {
   @Prop({ required: true, min: 1, max: 5 })
   rating!: number;
@@ -21,6 +22,9 @@ export class BookingReview {
   @Prop({ default: Date.now })
   createdAt!: Date;
 }
+
+export const BookingReviewSchema =
+  SchemaFactory.createForClass(BookingReview);
 
 @Schema({ timestamps: true })
 export class Booking {
@@ -66,17 +70,10 @@ export class Booking {
   @Prop()
   notes?: string;
 
-  @Prop()
   @Prop({ enum: ['pay_on_service'], default: 'pay_on_service' })
   paymentMethod?: string;
 
-  @Prop({
-    type: {
-      rating: Number,
-      comment: String,
-      createdAt: Date,
-    },
-  })
+  @Prop({ type: BookingReviewSchema })
   review?: BookingReview;
 }
 

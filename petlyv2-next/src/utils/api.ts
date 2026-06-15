@@ -351,6 +351,19 @@ export interface CreateBookingPayload {
   paymentMethod?: string;
 }
 
+export interface Booking {
+  caregiverId: string;
+  startDate: string;
+  endDate: string;
+  serviceType: string;
+  petId?: string | null;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  notes?: string;
+  paymentMethod?: string;
+}
+
 export interface CreateBookingResponse {
   jobId: string;
   message: string;
@@ -373,26 +386,26 @@ export async function apiCreateBooking(payload: CreateBookingPayload) {
   };
 }
 
-export async function apiGetMyBookings(): Promise<any[]> {
+export async function apiGetMyBookings(): Promise<Booking[]> {
   return request('/bookings/my');
 }
 
-export async function apiCancelBooking(id: string): Promise<any> {
+export async function apiCancelBooking(id: string): Promise<Booking> {
   return request(`/bookings/${id}/cancel`, { method: 'PATCH' });
 }
 
-export async function apiConfirmBooking(id: string, location?: string): Promise<any> {
+export async function apiConfirmBooking(id: string, location?: string): Promise<Booking> {
   return request(`/bookings/${id}/confirm`, {
     method: 'PATCH',
     body: JSON.stringify({ location }),
   });
 }
 
-export async function apiStartBooking(id: string): Promise<any> {
+export async function apiStartBooking(id: string): Promise<Booking> {
   return request(`/bookings/${id}/start`, { method: 'PATCH' });
 }
 
-export async function apiCompleteBooking(id: string): Promise<any> {
+export async function apiCompleteBooking(id: string): Promise<Booking> {
   return request(`/bookings/${id}/complete`, { method: 'PATCH' });
 }
 

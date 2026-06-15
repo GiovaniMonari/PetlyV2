@@ -45,6 +45,7 @@ type CaregiverService = {
 
 type CaregiverProfile = {
   _id: string;
+  userId: string;
   name: string;
   role: string;
   avatar?: string;
@@ -837,7 +838,7 @@ export default function CaregiverDetailPage() {
 
     try {
       await apiCreateBooking({
-        caregiverId,
+        caregiverId: caregiver.userId,
         startDate,
         endDate: isShortService ? startDate : endDate,
         serviceType: selectedServiceData.name,

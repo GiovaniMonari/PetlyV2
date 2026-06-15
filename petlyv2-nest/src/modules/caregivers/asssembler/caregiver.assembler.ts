@@ -8,11 +8,6 @@ import { UserLean } from "@modules/users/lean/user.lean";
 
 @Injectable()
 export class CaregiverAssembler {
-  constructor(
-    @InjectModel(User.name)
-    private readonly userModel: Model<UserDocument>,
-  ) {}
-
   build(profile: CaregiverProfileLean, user: UserLean) {
     return {
       id: profile._id,
@@ -21,11 +16,18 @@ export class CaregiverAssembler {
     };
   }
 
-  buildMany(profiles, userMap: Map<string, UserLean>) {
-    return profiles.map(profile => ({
+  buildMany(
+    profiles: CaregiverProfileLean[],
+    userMap: Map<string, UserLean>,
+  ) {
+    return profiles.map((profile) => {
+      const userId = profile.userId?.toString();
+
+      return {
         id: profile._id,
-        user: userMap.get(profile.userId.toString()),
+        user: userMap.get(userId) ?? null,
         profile,
-    }));
+      };
+    });
   }
 }

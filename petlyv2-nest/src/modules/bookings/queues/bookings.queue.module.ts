@@ -10,7 +10,10 @@ export const BOOKINGS_QUEUE = 'bookings';
     {
       provide: BOOKINGS_QUEUE,
       useFactory: () => {
-        const connection = new IORedis(process.env.REDIS_URL);
+        const connection = new IORedis(process.env.REDIS_URL, {
+          maxRetriesPerRequest: null,
+          enableReadyCheck: false,
+        });
 
         return new Queue(BOOKINGS_QUEUE, {
           connection,

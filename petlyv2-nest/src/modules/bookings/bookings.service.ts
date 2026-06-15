@@ -60,10 +60,8 @@ export class BookingsService {
   }
 
   async create(tutorId: string, dto: CreateBookingDto): Promise<{ jobId: string }> {
-    const start = new Date(dto.startDate).toISOString();
-    const end = new Date(dto.endDate).toISOString();
 
-    const jobId = `booking:${dto.caregiverId}:${start}:${end}`;
+    const jobId = `booking-${dto.caregiverId}-${new Date(dto.startDate).getTime()}-${new Date(dto.endDate).getTime()}`;
 
     const job: Job = await this.bookingsQueue.add(
       'create-booking',
@@ -123,118 +121,110 @@ export class BookingsService {
       throw new BadRequestException('Data inválida');
     }
 
-    const session = await this.bookingModel.db.startSession();
+    // 🔥 overlap check
+    const conflict = await this.bookingModel.findOne({
+      caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+      status: {
+        $in: [
+          BookingStatus.PENDING,
+          BookingStatus.CONFIRMED,
+          BookingStatus.IN_PROGRESS,
+        ],
+      },
+      $or: [
+        {
+          startDate: { $lte: endDate },
+          endDate: { $gte: startDate },
+        },
+      ],
+    });
 
-    try {
-      let saved: BookingDocument;
-
-      await session.withTransaction(async () => {
-        // 🔥 ATOMIC OVERLAP CHECK (dentro da transaction)
-        const conflict = await this.bookingModel
-          .findOne({
-            caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
-            status: {
-              $in: [
-                BookingStatus.PENDING,
-                BookingStatus.CONFIRMED,
-                BookingStatus.IN_PROGRESS,
-              ],
-            },
-            $or: [
-              {
-                startDate: { $lte: endDate },
-                endDate: { $gte: startDate },
-              },
-            ],
-          })
-          .session(session)
-          .lean();
-
-        if (conflict) {
-          throw new BadRequestException('Já existe reserva nesse período');
-        }
-
-        const pet = await this.usersService.findPetById(createBookingDto.petId);
-
-        if (pet.userId?.toString() !== tutorId) {
-          throw new BadRequestException('Pet não pertence ao tutor');
-        }
-
-        const caregiverPets =
-          caregiverProfile.petsQuantity?.map((p: any) => p.type) || [];
-
-        if (!caregiverPets.includes(pet.type)) {
-          throw new BadRequestException('Tipo de pet não aceito');
-        }
-
-        if (pet.type === 'dog') {
-          const dog = caregiverProfile.petsQuantity?.find((p: any) => p.type === 'dog');
-          if (!dog?.sizes?.includes(pet.size)) {
-            throw new BadRequestException('Porte do cão não aceito');
-          }
-        }
-
-        const serviceType = createBookingDto.serviceType?.trim();
-        if (!serviceType) throw new BadRequestException('Serviço inválido');
-
-        const service = caregiverProfile.services?.find(
-          (s: any) =>
-            s.name.toLowerCase() === serviceType.toLowerCase(),
-        );
-
-        const totalDays = Math.max(
-          1,
-          Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000),
-        );
-
-        const pricePerDay = service?.price ?? caregiverProfile.minPrice ?? 0;
-
-        const [booking] = await this.bookingModel.create(
-          [
-            {
-              tutorId: new Types.ObjectId(tutorId),
-              caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
-              petId: new Types.ObjectId(createBookingDto.petId),
-              startDate,
-              endDate,
-              serviceType,
-              location: createBookingDto.location,
-              startTime: createBookingDto.startTime,
-              endTime: createBookingDto.endTime,
-              totalDays,
-              pricePerDay,
-              totalPrice: totalDays * pricePerDay,
-              notes: createBookingDto.notes,
-              paymentMethod:
-                createBookingDto.paymentMethod ?? 'pay_on_service',
-            },
-          ],
-          { session },
-        );
-
-        saved = booking;
-      });
-
-      return saved!;
-    } finally {
-      await session.endSession();
+    if (conflict) {
+      throw new BadRequestException('Já existe reserva nesse período');
     }
+
+    const pet = await this.usersService.findPetById(createBookingDto.petId);
+
+    if (pet.userId?.toString() !== tutorId) {
+      throw new BadRequestException('Pet não pertence ao tutor');
+    }
+
+    const caregiverPets =
+      caregiverProfile.petsQuantity?.map((p: any) => p.type) || [];
+
+    if (!caregiverPets.includes(pet.type)) {
+      throw new BadRequestException('Tipo de pet não aceito');
+    }
+
+    if (pet.type === 'dog') {
+      const dog = caregiverProfile.petsQuantity?.find(
+        (p: any) => p.type === 'dog',
+      );
+
+      if (!dog?.sizes?.includes(pet.size)) {
+        throw new BadRequestException('Porte do cão não aceito');
+      }
+    }
+
+    const serviceType = createBookingDto.serviceType?.trim();
+    if (!serviceType) throw new BadRequestException('Serviço inválido');
+
+    console.log(
+      caregiverProfile.services.map(s => ({
+        name: s.name,
+        lower: s.name?.toLowerCase(),
+      })),
+    );
+
+    console.log('buscando:', serviceType.toLowerCase());
+
+    const service = caregiverProfile.services.find(
+      s => s.name?.toLowerCase() === serviceType.toLowerCase(),
+    );
+
+    if (!service) {
+      throw new BadRequestException(
+        `Serviço '${serviceType}' não encontrado para este cuidador`,
+      );
+    }
+
+    const totalDays = Math.max(
+      1,
+      Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000),
+    );
+
+    const pricePerDay = service?.price ?? caregiverProfile.minPrice ?? 0;
+
+    const [booking] = await this.bookingModel.create([
+      {
+        tutorId: new Types.ObjectId(tutorId),
+        caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+        petId: new Types.ObjectId(createBookingDto.petId),
+        startDate,
+        endDate,
+        serviceType,
+        location: createBookingDto.location,
+        startTime: createBookingDto.startTime,
+        endTime: createBookingDto.endTime,
+        totalDays,
+        pricePerDay,
+        totalPrice: totalDays * pricePerDay,
+        notes: createBookingDto.notes,
+        paymentMethod: createBookingDto.paymentMethod ?? 'pay_on_service',
+      },
+    ]);
+
+    return booking;
   }
 
-  async findByTutor(tutorId: string): Promise<BookingDocument[]> {
-    const bookings = await this.bookingModel
+  async findByTutor(tutorId: string) {
+    return this.bookingModel
       .find({ tutorId: new Types.ObjectId(tutorId) })
-      .populate('caregiverId', 'name avatar location rating')
-      .populate('petId')
+      .populate('caregiverId', 'name avatar location')
+      .populate('petId', 'name type age avatar')
       .sort({ createdAt: -1 })
+      .lean()
       .exec();
-
-    // Ensure paymentMethod is exposed in the response object
-    return bookings.map((b) => {
-      const obj: any = b.toObject ? b.toObject() : b;
-      obj.paymentMethod = obj.paymentMethod ?? b.paymentMethod;
-      return obj as BookingDocument;
-    });
   }
 
   async findByCaregiver(caregiverId: string): Promise<BookingDocument[]> {

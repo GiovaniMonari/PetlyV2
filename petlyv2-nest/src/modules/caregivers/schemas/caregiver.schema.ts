@@ -68,9 +68,14 @@ export class CaregiverProfile {
         type: {
           type: String,
           enum: Object.values(ServiceType),
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
         },
         name: String,
-        price: Number,
+        description: String,
         duration: String,
       },
     ],
@@ -86,7 +91,10 @@ export class CaregiverProfile {
   @Prop({
     type: [
       {
-        service: String,
+        service: {
+          type: String,
+          enum: Object.values(ServiceType),
+        },
         availableDays: [String],
         serviceHours: [String],
       },

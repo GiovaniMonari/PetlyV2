@@ -35,7 +35,7 @@ export class User {
   @Prop({ default: true })
   isActive?: boolean;
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'tutor' }], default: [] })
+  @Prop({ type: [{ type: Types.ObjectId, ref: User.name }], default: [] })
   favorites?: Types.ObjectId[];
 }
 
@@ -50,10 +50,4 @@ UserSchema.index({
   role: 1,
   isActive: 1,
   createdAt: -1,
-});
-
-UserSchema.index({
-  role: 1,
-  isActive: 1,
-  rating: -1,
 });
