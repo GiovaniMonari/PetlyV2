@@ -89,19 +89,26 @@ export class BookingsService {
     tutorId: string,
     createBookingDto: CreateBookingDto,
   ): Promise<BookingDocument> {
-    const caregiver = await this.usersService.findById(createBookingDto.caregiverId);
+    const caregiverUser = await this.usersService.findById(
+      createBookingDto.caregiverId,
+    );
 
-    if (!caregiver || caregiver.role !== 'caregiver') {
+    const caregiverProfile =
+      await this.caregiversService.findProfileByUserId(
+        createBookingDto.caregiverId,
+      );
+
+    if (!caregiverUser || caregiverUser.role !== 'caregiver') {
       throw new NotFoundException('Cuidador não encontrado');
     }
 
     const tutor = await this.usersService.findById(tutorId);
 
-    if (!tutor.location || !caregiver.location) {
+    if (!tutor.location || !caregiverUser.location) {
       throw new BadRequestException('Localização obrigatória');
     }
 
-    if (!this.isSameCityOrState(tutor.location, caregiver.location)) {
+    if (!this.isSameCityOrState(tutor.location, caregiverUser.location)) {
       throw new BadRequestException('Cuidador fora da sua região');
     }
 
@@ -154,14 +161,14 @@ export class BookingsService {
         }
 
         const caregiverPets =
-          caregiver.petsQuantity?.map((p: any) => p.type) || [];
+          caregiverProfile.petsQuantity?.map((p: any) => p.type) || [];
 
         if (!caregiverPets.includes(pet.type)) {
           throw new BadRequestException('Tipo de pet não aceito');
         }
 
         if (pet.type === 'dog') {
-          const dog = caregiver.petsQuantity?.find((p: any) => p.type === 'dog');
+          const dog = caregiverProfile.petsQuantity?.find((p: any) => p.type === 'dog');
           if (!dog?.sizes?.includes(pet.size)) {
             throw new BadRequestException('Porte do cão não aceito');
           }
@@ -170,7 +177,7 @@ export class BookingsService {
         const serviceType = createBookingDto.serviceType?.trim();
         if (!serviceType) throw new BadRequestException('Serviço inválido');
 
-        const service = caregiver.services?.find(
+        const service = caregiverProfile.services?.find(
           (s: any) =>
             s.name.toLowerCase() === serviceType.toLowerCase(),
         );
@@ -180,7 +187,7 @@ export class BookingsService {
           Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000),
         );
 
-        const pricePerDay = service?.price ?? caregiver.price ?? 0;
+        const pricePerDay = service?.price ?? caregiverProfile.minPrice ?? 0;
 
         const [booking] = await this.bookingModel.create(
           [

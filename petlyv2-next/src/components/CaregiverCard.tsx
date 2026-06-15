@@ -21,7 +21,10 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
   const isTutor = user?.role === 'tutor' || !user;
 
   const openCaregiverPage = () => {
-    router.push(`/cuidadores/${caregiver.id}`);
+    const caregiverId =
+      caregiver.profile?._id || caregiver.id;
+
+    router.push(`/cuidadores/${caregiverId}`);
   };
 
   const handleToggleFavorite = async (e: React.MouseEvent) => {

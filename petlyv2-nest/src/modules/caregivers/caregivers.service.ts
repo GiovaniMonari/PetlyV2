@@ -52,7 +52,7 @@ const SERVICE_DEFAULTS: Record<
 export class CaregiversService {
   constructor(
   @InjectModel(CaregiverProfile.name)
-  private caregiverModel: Model<CaregiverProfileDocument>,
+  private caregiverProfileModel: Model<CaregiverProfileDocument>,
 
   @InjectModel(User.name)
   private userModel: Model<UserDocument>,
@@ -83,7 +83,7 @@ export class CaregiversService {
       role: UserRole.CAREGIVER,
     });
 
-    const profile = await this.caregiverModel.create({
+    const profile = await this.caregiverProfileModel.create({
       userId: user._id,
       cpf: dto.cpf,
       bio: dto.bio,
@@ -108,7 +108,7 @@ export class CaregiversService {
 async findOne(profileId: string) {
   this.validateId(profileId);
 
-  const profile = await this.caregiverModel
+  const profile = await this.caregiverProfileModel
     .findById(profileId)
     .lean<CaregiverProfileLean>();
 
@@ -126,7 +126,7 @@ async findOne(profileId: string) {
   // FIND ALL
   // --------------------------
   async findAll() {
-  const profiles = await this.caregiverModel
+  const profiles = await this.caregiverProfileModel
     .find()
     .lean<CaregiverProfileLean[]>();
 
@@ -202,7 +202,7 @@ async findOne(profileId: string) {
         ? { minPrice: -1 }
         : { createdAt: -1 };
 
-    const profiles = await this.caregiverModel
+    const profiles = await this.caregiverProfileModel
       .find(query)
       .sort(sort)
       .lean<CaregiverProfileLean[]>();
@@ -220,13 +220,27 @@ async findOne(profileId: string) {
 
     return this.assembleMany(profiles, userMap);
   }
+
+  async findProfileByUserId(userId: string) {
+    const profile = await this.caregiverProfileModel.findOne({
+      userId: new Types.ObjectId(userId),
+    });
+
+    if (!profile) {
+      throw new NotFoundException(
+        'Perfil do cuidador não encontrado',
+      );
+    }
+
+    return profile;
+  }
   // --------------------------
   // UPDATE PROFILE (ONLY FIELDS)
   // --------------------------
   async updateProfile(id: string, dto: UpdateCaregiverDto) {
     this.validateId(id);
 
-    const updated = await this.caregiverModel.findByIdAndUpdate(
+    const updated = await this.caregiverProfileModel.findByIdAndUpdate(
       id,
       {
         $set: {
@@ -260,7 +274,7 @@ async findOne(profileId: string) {
     const minPrice = prices.length ? Math.min(...prices) : 0;
     const maxPrice = prices.length ? Math.max(...prices) : 0;
 
-    const updated = await this.caregiverModel.findByIdAndUpdate(
+    const updated = await this.caregiverProfileModel.findByIdAndUpdate(
       id,
       {
         $set: {
@@ -286,7 +300,7 @@ async findOne(profileId: string) {
 
     const base = SERVICE_DEFAULTS[type];
 
-    const updated = await this.caregiverModel.findOneAndUpdate(
+    const updated = await this.caregiverProfileModel.findOneAndUpdate(
       { _id: id, 'services.type': type },
       {
         $set: {
@@ -304,7 +318,7 @@ async findOne(profileId: string) {
       return this.recalculatePrices(updated);
     }
 
-    if (!(await this.caregiverModel.exists({ _id: id }))) {
+    if (!(await this.caregiverProfileModel.exists({ _id: id }))) {
       throw new NotFoundException();
     }
 
@@ -315,7 +329,7 @@ async findOne(profileId: string) {
       description: base.description,
     };
 
-    const created = await this.caregiverModel.findByIdAndUpdate(
+    const created = await this.caregiverProfileModel.findByIdAndUpdate(
       id,
       { $push: { services: newService } },
       { new: true },
@@ -330,7 +344,7 @@ async findOne(profileId: string) {
   async addAvailability(id: string, dto: AvailabilityDto) {
     this.validateId(id);
 
-    return this.caregiverModel.findByIdAndUpdate(
+    return this.caregiverProfileModel.findByIdAndUpdate(
       id,
       { $push: { availability: dto } },
       { new: true },
@@ -340,7 +354,7 @@ async findOne(profileId: string) {
   async updateAvailability(id: string, dto: AvailabilityDto[]) {
     this.validateId(id);
 
-    return this.caregiverModel.findByIdAndUpdate(
+    return this.caregiverProfileModel.findByIdAndUpdate(
       id,
       { $set: { availability: dto } },
       { new: true },
@@ -353,14 +367,14 @@ async findOne(profileId: string) {
   async remove(id: string) {
     this.validateId(id);
 
-    const profile = await this.caregiverModel.findById(id);
+    const profile = await this.caregiverProfileModel.findById(id);
     if (!profile) throw new NotFoundException();
 
     await this.userModel.findByIdAndUpdate(profile.userId, {
       role: UserRole.TUTOR,
     });
 
-    await this.caregiverModel.deleteOne({ _id: id });
+    await this.caregiverProfileModel.deleteOne({ _id: id });
   }
 
   // --------------------------
@@ -397,7 +411,7 @@ async findOne(profileId: string) {
       ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
       : 0;
 
-    await this.caregiverModel.findByIdAndUpdate(caregiverId, {
+    await this.caregiverProfileModel.findByIdAndUpdate(caregiverId, {
       rating,
       reviewsCount: ratings.length,
     });

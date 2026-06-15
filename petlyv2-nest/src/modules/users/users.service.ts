@@ -8,6 +8,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Pet, PetDocument } from 'src/modules/user-pets/schemas/pets.schema';
 import { CacheService } from '@modules/cache/cache.service';
+import { CaregiverProfileDocument } from '@modules/caregivers/schemas/caregiver.schema';
 
 @Injectable()
 export class UsersService {
@@ -18,6 +19,8 @@ export class UsersService {
     private cloudinaryService: CloudinaryService,
     @InjectModel(Pet.name)
     private petModel: Model<PetDocument>,
+    @InjectModel('CaregiverProfile') 
+    private caregiverProfileModel: Model<CaregiverProfileDocument>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
@@ -79,42 +82,22 @@ export class UsersService {
       throw new NotFoundException('ID inválido');
     }
 
-    const { petQuantities, availability, ...restUpdate } = updateUserDto;
-
-    const finalUpdate: any = { ...restUpdate };
-
-    if (petQuantities) {
-      finalUpdate.petsQuantity = petQuantities.map((p: any) => {
-        const { _id, ...rest } = p;
-
-        if (rest.type === 'dog') {
-          if (!Array.isArray(rest.sizes) || rest.sizes.length === 0) {
-            throw new BadRequestException(
-              'Informe ao menos um porte aceito (small, medium ou large).',
-            );
-          }
-
-          rest.sizes = Array.from(new Set(rest.sizes));
-        } else {
-          delete rest.sizes;
-        }
-
-        return rest;
-      });
-    }
-
-    if (availability) {
-      finalUpdate.availability = availability.map((a: any) => {
-        const { _id, ...rest } = a;
-        return rest;
-      });
-    }
+    const finalUpdate = {
+      ...updateUserDto,
+    };
 
     const user = await this.userModel
-      .findByIdAndUpdate(id, { $set: finalUpdate }, { new: true })
+      .findByIdAndUpdate(
+        id,
+        { $set: finalUpdate },
+        {
+          new: true,
+          runValidators: true,
+        },
+      )
       .select('-password')
       .exec();
-
+      
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
@@ -194,15 +177,35 @@ export class UsersService {
     return tutor;
   }
 
-  async getFavoriteCaregivers(tutorId: string): Promise<UserDocument[]> {
+  async getFavoriteCaregivers(tutorId: string) {
     const tutor = await this.findById(tutorId);
 
-    const caregivers = await this.userModel
-      .find({ _id: { $in: tutor.favorites } })
-      .select('-password -cpf')
-      .exec();
+    const favorites = await Promise.all(
+      tutor.favorites.map(async (favoriteId) => {
+        const user = await this.userModel
+          .findById(favoriteId)
+          .select('-password -cpf')
+          .lean();
 
-    return caregivers;
+        if (!user) {
+          return null;
+        }
+
+        const profile = await this.caregiverProfileModel
+        .findOne({
+          userId: new Types.ObjectId(favoriteId.toString()),
+        })
+        .lean();
+
+        return {
+          id: user._id,
+          user,
+          profile,
+        };
+      }),
+    );
+
+    return favorites.filter(Boolean);
   }
 
   async getMyLocation(userId: string): Promise<string> {
@@ -238,7 +241,7 @@ export class UsersService {
     const user = await this.findById(userId);
 
     const pets = await this.petModel
-      .find({ _id: { $in: user.pets } })
+      .find({ _id: { $in: user.myPets } })
       .exec();
 
     await this.cacheService.set(
@@ -260,8 +263,8 @@ export class UsersService {
     if (!pet) {
       throw new NotFoundException('Pet não encontrado');
     }
-    if (!user.pets.includes(petId)) {
-      user.pets.push(petId);
+    if (!user.myPets.includes(petId)) {
+      user.myPets.push(petId);
       await user.save();
       await this.cacheService.del(
         `user-pets:${userId}`,
@@ -285,7 +288,7 @@ export class UsersService {
   ): Promise<UserDocument> {
     const user = await this.findById(userId);
 
-    user.pets = user.pets.filter(
+    user.myPets = user.myPets.filter(
       (id) => id.toString() !== petId,
     );
 

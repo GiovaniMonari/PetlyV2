@@ -30,8 +30,17 @@ export default function FavoritosPage() {
 
     const fetchFavorites = async () => {
       setIsLoading(true);
+
       try {
         const data = await apiGetFavoriteCaregivers();
+
+        console.log('FAVORITOS:', data);
+        console.log('PRIMEIRO:', data?.[0]);
+        console.log(
+          'PRIMEIRO FORMATADO:',
+          JSON.stringify(data?.[0], null, 2)
+        );
+
         setFavorites(data || []);
       } catch (err) {
         console.error('Erro ao buscar favoritos:', err);
@@ -78,8 +87,8 @@ export default function FavoritosPage() {
           ) : favorites.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {favorites.map((caregiver) => (
-                <div key={caregiver._id || caregiver.id}>
-                  <CaregiverCard caregiver={{...caregiver, id: caregiver._id || caregiver.id}} />
+                <div key={caregiver.id}>
+                  <CaregiverCard caregiver={caregiver} />
                 </div>
               ))}
             </div>
