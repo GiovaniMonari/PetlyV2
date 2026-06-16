@@ -7,6 +7,8 @@ import {
   Param,
   Body,
   Query,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
 
 import { CaregiversService } from './caregivers.service';
@@ -15,6 +17,7 @@ import { UpdateCaregiverDto } from './dto/update-caregiver.dto';
 import { ServiceDto } from './dto/service-dto';
 import { UpdateServiceDto } from './dto/update-services.dto';
 import { AvailabilityDto } from './dto/availability.dto';
+import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 
 @Controller('caregivers')
 export class CaregiversController {
@@ -31,6 +34,21 @@ export class CaregiversController {
   @Get()
   findAll() {
     return this.caregiversService.findAll();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/profile')
+  findMyProfile(@Request() req: any): Promise<any> {
+    return this.caregiversService.findDashboardProfile(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/profile')
+  updateMyProfile(
+    @Request() req: any,
+    @Body() dto: UpdateCaregiverDto,
+  ) {
+    return this.caregiversService.updateProfileByUserId(req.user.userId, dto);
   }
 
   // --------------------------

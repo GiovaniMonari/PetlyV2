@@ -16,7 +16,8 @@ import Footer from '@/components/Footer';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import {
   apiGetProfile,
-  apiUpdateProfile,
+  apiGetMyCaregiverProfile,
+  apiUpdateMyCaregiverProfile,
   isAuthenticated,
   setUser as setLocalUser,
 } from '@/utils/api';
@@ -40,17 +41,25 @@ export default function DisponibilidadePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [availability, setAvailability] = useState<any[]>([]);
+  const [blockedDates, setBlockedDates] = useState<string[]>([]);
+  const [blockedTimeSlots, setBlockedTimeSlots] = useState<string[]>([]);
   const [activeService, setActiveService] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [mode, setMode] = useState<'availability' | 'blocked'>('availability');
+  const [selectedBlockDate, setSelectedBlockDate] = useState(formatDateToYYYYMMDD(new Date()));
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push('/login'); return; }
     const fetchData = async () => {
       try {
-        const profileData = await apiGetProfile();
-        if (profileData.role !== 'caregiver') { router.push('/'); return; }
-        setProfile(profileData);
+        const userData = await apiGetProfile();
+        if (userData.role !== 'caregiver') { router.push('/'); return; }
+        const profileData = await apiGetMyCaregiverProfile();
+        const dashboardProfile = { ...profileData.user, ...profileData, role: userData.role };
+        setProfile(dashboardProfile);
         setAvailability(profileData.availability || []);
+        setBlockedDates(profileData.blockedDates || []);
+        setBlockedTimeSlots(profileData.blockedTimeSlots || []);
         if (profileData.services?.length > 0) {
           setActiveService(profileData.services[0].type || profileData.services[0].name);
         }
@@ -63,10 +72,16 @@ export default function DisponibilidadePage() {
     setIsSaving(true);
     setSuccessMsg('');
     try {
-      const updated = await apiUpdateProfile(profile._id, { availability });
-      setProfile(updated);
-      setLocalUser(updated);
+      const updated = await apiUpdateMyCaregiverProfile({
+        availability,
+        blockedDates,
+        blockedTimeSlots,
+      });
+      const dashboardProfile = { ...profile, ...updated };
+      setProfile(dashboardProfile);
       setAvailability(updated.availability || []);
+      setBlockedDates(updated.blockedDates || []);
+      setBlockedTimeSlots(updated.blockedTimeSlots || []);
       setSuccessMsg('Disponibilidade atualizada!');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch { alert('Erro ao salvar.'); }
@@ -96,6 +111,14 @@ export default function DisponibilidadePage() {
     });
   };
 
+  const toggleBlockedDate = (dateStr: string) => {
+    setBlockedDates(prev =>
+      prev.includes(dateStr)
+        ? prev.filter(d => d !== dateStr)
+        : [...prev, dateStr].sort()
+    );
+  };
+
   const toggleHour = (hour: string) => {
     if (!activeService) return;
     setAvailability(prev => {
@@ -110,6 +133,15 @@ export default function DisponibilidadePage() {
       }
       return [...prev, { service: activeService, availableDays: [], serviceHours: [hour] }];
     });
+  };
+
+  const toggleBlockedHour = (hour: string) => {
+    const slotKey = `${selectedBlockDate}@${hour}`;
+    setBlockedTimeSlots(prev =>
+      prev.includes(slotKey)
+        ? prev.filter(slot => slot !== slotKey)
+        : [...prev, slotKey].sort()
+    );
   };
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -134,15 +166,28 @@ export default function DisponibilidadePage() {
       const date = new Date(year, month, day);
       const dateStr = formatDateToYYYYMMDD(date);
       const isSelected = currentAvail.availableDays.includes(dateStr);
+      const isBlocked = blockedDates.includes(dateStr);
+      const isBlockTarget = selectedBlockDate === dateStr;
       const isPast = date < today;
 
       days.push(
         <button
           key={day}
           disabled={isPast}
-          onClick={() => toggleDay(dateStr)}
+          onClick={() => {
+            setSelectedBlockDate(dateStr);
+            if (mode === 'blocked') {
+              toggleBlockedDate(dateStr);
+            } else {
+              toggleDay(dateStr);
+            }
+          }}
           className={`h-11 md:h-14 rounded-xl border flex flex-col items-center justify-center relative transition-all duration-150 text-sm font-bold ${
-            isSelected
+            isBlocked
+              ? 'bg-red-500/15 text-red-300 border-red-500/35 line-through'
+              : isBlockTarget && mode === 'blocked'
+              ? 'bg-white/10 text-white border-white/25'
+              : isSelected
               ? 'bg-[#06A77D]/20 text-[#06A77D] border-[#06A77D]/40 shadow-[inset_0_0_0_1px_rgba(6,167,125,0.3)]'
               : isPast
               ? 'opacity-20 cursor-not-allowed border-white/5 text-gray-600'
@@ -150,7 +195,9 @@ export default function DisponibilidadePage() {
           }`}
         >
           <span>{day}</span>
-          {isSelected && (
+          {isBlocked ? (
+            <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-red-400" />
+          ) : isSelected && (
             <span className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[#06A77D]" />
           )}
         </button>
@@ -191,7 +238,7 @@ export default function DisponibilidadePage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-white mb-1">Disponibilidade</h1>
-                <p className="text-gray-500 text-sm">Marque os dias e horários em que você atende para cada serviço.</p>
+                <p className="text-gray-500 text-sm">Marque quando você atende e bloqueie períodos indisponíveis.</p>
               </div>
               <button
                 onClick={handleSave}
@@ -208,6 +255,25 @@ export default function DisponibilidadePage() {
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {successMsg}
               </div>
             )}
+
+            <div className="inline-flex rounded-2xl bg-white/5 border border-white/10 p-1">
+              <button
+                onClick={() => setMode('availability')}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+                  mode === 'availability' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Disponibilidade
+              </button>
+              <button
+                onClick={() => setMode('blocked')}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+                  mode === 'blocked' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Bloqueios
+              </button>
+            </div>
 
             {/* No services */}
             {profile.services?.length === 0 ? (
@@ -293,8 +359,14 @@ export default function DisponibilidadePage() {
                         <div className="w-3 h-3 rounded-lg border border-white/15 bg-white/5" />
                         <span className="text-xs text-gray-500">Indisponível</span>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-400" />
+                        <span className="text-xs text-gray-500">Bloqueado</span>
+                      </div>
                       <div className="ml-auto text-xs text-gray-500 font-semibold">
-                        {currentAvail.availableDays.length} dia{currentAvail.availableDays.length !== 1 ? 's' : ''} selecionado{currentAvail.availableDays.length !== 1 ? 's' : ''}
+                        {mode === 'blocked'
+                          ? `${blockedDates.length} bloqueio${blockedDates.length !== 1 ? 's' : ''}`
+                          : `${currentAvail.availableDays.length} dia${currentAvail.availableDays.length !== 1 ? 's' : ''} selecionado${currentAvail.availableDays.length !== 1 ? 's' : ''}`}
                       </div>
                     </div>
                   </div>
@@ -311,13 +383,17 @@ export default function DisponibilidadePage() {
 
                     <div className="grid grid-cols-2 gap-2">
                       {HOURS.map(hour => {
-                        const isSelected = currentAvail.serviceHours.includes(hour);
+                        const slotKey = `${selectedBlockDate}@${hour}`;
+                        const isBlockedHour = blockedTimeSlots.includes(slotKey);
+                        const isSelected = mode === 'blocked' ? isBlockedHour : currentAvail.serviceHours.includes(hour);
                         return (
                           <button
                             key={hour}
-                            onClick={() => toggleHour(hour)}
+                            onClick={() => mode === 'blocked' ? toggleBlockedHour(hour) : toggleHour(hour)}
                             className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                              isSelected
+                              mode === 'blocked' && isSelected
+                                ? 'bg-red-500/15 text-red-300 border-red-500/30 line-through'
+                                : isSelected
                                 ? 'bg-[#FF6B35]/15 text-[#FF6B35] border-[#FF6B35]/30 shadow-[inset_0_0_0_1px_rgba(255,107,53,0.2)]'
                                 : 'bg-black/20 text-gray-500 border-white/5 hover:border-white/20 hover:text-white'
                             }`}
@@ -333,14 +409,18 @@ export default function DisponibilidadePage() {
                       <div className="bg-[#06A77D]/8 rounded-2xl p-4 border border-[#06A77D]/15">
                         <p className="text-[#06A77D] text-xs font-bold uppercase tracking-wider mb-2">Resumo</p>
                         <p className="text-white text-sm font-semibold">
-                          {currentAvail.availableDays.length} {currentAvail.availableDays.length === 1 ? 'dia disponível' : 'dias disponíveis'}
+                          {mode === 'blocked'
+                            ? `${blockedDates.length} ${blockedDates.length === 1 ? 'dia bloqueado' : 'dias bloqueados'}`
+                            : `${currentAvail.availableDays.length} ${currentAvail.availableDays.length === 1 ? 'dia disponível' : 'dias disponíveis'}`}
                         </p>
                         <p className="text-gray-400 text-xs mt-1">
-                          {currentAvail.serviceHours.length} {currentAvail.serviceHours.length === 1 ? 'horário definido' : 'horários definidos'}
+                          {mode === 'blocked'
+                            ? `${blockedTimeSlots.filter(slot => slot.startsWith(`${selectedBlockDate}@`)).length} ${blockedTimeSlots.filter(slot => slot.startsWith(`${selectedBlockDate}@`)).length === 1 ? 'horário bloqueado' : 'horários bloqueados'} em ${selectedBlockDate.split('-').reverse().join('/')}`
+                            : `${currentAvail.serviceHours.length} ${currentAvail.serviceHours.length === 1 ? 'horário definido' : 'horários definidos'}`}
                         </p>
-                        {currentAvail.serviceHours.length > 0 && (
+                        {mode === 'availability' && currentAvail.serviceHours.length > 0 && (
                           <p className="text-gray-500 text-xs mt-1">
-                            {currentAvail.serviceHours[0]} – {currentAvail.serviceHours[currentAvail.serviceHours.length - 1]}
+                            {currentAvail.serviceHours[0]} - {currentAvail.serviceHours[currentAvail.serviceHours.length - 1]}
                           </p>
                         )}
                       </div>

@@ -24,7 +24,7 @@ export class BookingsController {
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Request() req: any, @Body() createBookingDto: CreateBookingDto) {
-    return this.bookingsService.create(req.user.userId, createBookingDto);
+    return this.bookingsService.createDirect(req.user.userId, createBookingDto);
   }
 
   /**

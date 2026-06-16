@@ -3,7 +3,6 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-  Inject,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -17,8 +16,6 @@ import { BookingPricing } from './domain/booking.pricing';
 import { BookingValidation } from './domain/booking.validation';
 import { BookingLocation } from './domain/booking.location';
 import { RedisService } from 'src/redis/redis.service';
-import { Job, Queue } from 'bullmq';
-import { BOOKINGS_QUEUE } from './queues/bookings.queue.module';
 
 @Injectable()
 export class BookingsService {
@@ -28,8 +25,6 @@ export class BookingsService {
     private readonly usersService: UsersService,
     private readonly caregiversService: CaregiversService,
     private readonly redisService: RedisService,
-    @Inject(BOOKINGS_QUEUE)
-    private readonly bookingsQueue: Queue,  
   ) {}
 
   private normalizeLocation(value?: string): string {
@@ -57,30 +52,6 @@ export class BookingsService {
     if (aState && bState && aState === bState) return true;
 
     return aParts.some((part) => bParts.includes(part)) || bParts.some((part) => aParts.includes(part));
-  }
-
-  async create(tutorId: string, dto: CreateBookingDto): Promise<{ jobId: string }> {
-
-    const jobId = `booking-${dto.caregiverId}-${new Date(dto.startDate).getTime()}-${new Date(dto.endDate).getTime()}`;
-
-    const job: Job = await this.bookingsQueue.add(
-      'create-booking',
-      { tutorId, dto },
-      {
-        jobId,
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 2000,
-        },
-        removeOnComplete: true,
-        removeOnFail: false, // importante pra debug
-      },
-    );
-
-    return {
-      jobId: job.id!,
-    };
   }
 
   async createDirect(
@@ -121,25 +92,91 @@ export class BookingsService {
       throw new BadRequestException('Data inválida');
     }
 
-    // 🔥 overlap check
-    const conflict = await this.bookingModel.findOne({
-      caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
-      status: {
-        $in: [
-          BookingStatus.PENDING,
-          BookingStatus.CONFIRMED,
-          BookingStatus.IN_PROGRESS,
-        ],
-      },
-      $or: [
-        {
-          startDate: { $lte: endDate },
-          endDate: { $gte: startDate },
-        },
-      ],
-    });
+    // 🔥 overlap check — time-aware for short services (walk, grooming, etc.)
+    //
+    // A booking is considered a "short service" when startTime is present (e.g. walk, grooming).
+    // We intentionally use only startTime — endTime may be absent or null depending on the client.
+    // Full-day services (boarding, daycare) have no startTime.
+    const isShortService = !!(createBookingDto.startTime);
 
-    if (conflict) {
+    // Helper: convert "HH:mm" to total minutes for numeric overlap check
+    const toMinutes = (t: string): number => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    let hasConflict = false;
+
+    if (isShortService) {
+      // Two short-service bookings on the same day can coexist as long as their
+      // time windows don't overlap. We also prevent a short service from being
+      // booked on a day already taken by a full-day service.
+
+      type LeanBooking = { startTime?: string | null; endTime?: string | null };
+
+      const activeStatuses = [
+        BookingStatus.PENDING,
+        BookingStatus.CONFIRMED,
+        BookingStatus.IN_PROGRESS,
+      ];
+
+      // 1. Check for an existing full-day service on the same date range
+      const fullDayConflict = await this.bookingModel.findOne({
+        caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+        status: { $in: activeStatuses },
+        startDate: { $lte: endDate },
+        endDate: { $gte: startDate },
+        startTime: { $in: [null, undefined] },
+      });
+
+      if (fullDayConflict) {
+        hasConflict = true;
+      } else {
+        // 2. Check for time-slot overlap with other short-service bookings on the same day
+        const shortServiceBookings = await this.bookingModel
+          .find({
+            caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+            status: { $in: activeStatuses },
+            startDate: { $lte: endDate },
+            endDate: { $gte: startDate },
+            startTime: { $exists: true, $ne: null },
+          })
+          .select('startTime endTime')
+          .lean<LeanBooking[]>();
+
+        const newStart = toMinutes(createBookingDto.startTime);
+        // If endTime is absent, assume a 1-hour slot as a safe default
+        const newEnd = createBookingDto.endTime
+          ? toMinutes(createBookingDto.endTime)
+          : newStart + 60;
+
+        hasConflict = shortServiceBookings.some((b) => {
+          if (!b.startTime) return false;
+          const existingStart = toMinutes(b.startTime);
+          // If the existing booking has no endTime, treat it as a 1-hour slot
+          const existingEnd = b.endTime ? toMinutes(b.endTime) : existingStart + 60;
+          return existingStart < newEnd && existingEnd > newStart;
+        });
+      }
+    } else {
+      // Full-day service: block if there is ANY active booking in the date range
+      // (both full-day and short-service bookings block a new full-day booking).
+      const fullDayConflict = await this.bookingModel.findOne({
+        caregiverId: new Types.ObjectId(createBookingDto.caregiverId),
+        status: {
+          $in: [
+            BookingStatus.PENDING,
+            BookingStatus.CONFIRMED,
+            BookingStatus.IN_PROGRESS,
+          ],
+        },
+        $or: [{ startDate: { $lte: endDate }, endDate: { $gte: startDate } }],
+      });
+
+      hasConflict = fullDayConflict !== null;
+    }
+
+    if (hasConflict) {
       throw new BadRequestException('Já existe reserva nesse período');
     }
 
@@ -188,6 +225,28 @@ export class BookingsService {
       );
     }
 
+    const isShortServiceByDuration = this.isShortServiceDuration(service.duration);
+
+    if (isShortServiceByDuration && !createBookingDto.startTime) {
+      throw new BadRequestException('Selecione um horário para este serviço');
+    }
+
+    this.ensureNotManuallyBlocked(
+      caregiverProfile,
+      startDate,
+      endDate,
+      createBookingDto.startTime,
+    );
+
+    this.ensureCaregiverAvailability(
+      caregiverProfile,
+      service.type,
+      service.name,
+      startDate,
+      endDate,
+      createBookingDto.startTime,
+    );
+
     const totalDays = Math.max(
       1,
       Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000),
@@ -213,6 +272,8 @@ export class BookingsService {
         paymentMethod: createBookingDto.paymentMethod ?? 'pay_on_service',
       },
     ]);
+
+    await this.caregiversService.invalidateCaregiverCache(createBookingDto.caregiverId);
 
     return booking;
   }
@@ -283,7 +344,9 @@ export class BookingsService {
       booking.location = location.trim();
     }
 
-    return booking.save();
+    const result = await booking.save();
+    await this.caregiversService.invalidateCaregiverCache(booking.caregiverId.toString());
+    return result;
   }
 
   async startBooking(id: string, caregiverId: string): Promise<BookingDocument> {
@@ -303,7 +366,9 @@ export class BookingsService {
     }
 
     booking.status = BookingStatus.IN_PROGRESS;
-    return booking.save();
+    const result = await booking.save();
+    await this.caregiversService.invalidateCaregiverCache(booking.caregiverId.toString());
+    return result;
   }
 
   async completeBooking(id: string, caregiverId: string): Promise<BookingDocument> {
@@ -317,7 +382,9 @@ export class BookingsService {
     }
 
     booking.status = BookingStatus.COMPLETED;
-    return booking.save();
+    const result = await booking.save();
+    await this.caregiversService.invalidateCaregiverCache(booking.caregiverId.toString());
+    return result;
   }
 
   async cancel(id: string, userId: string): Promise<BookingDocument> {
@@ -337,7 +404,9 @@ export class BookingsService {
     }
 
     booking.status = BookingStatus.CANCELLED;
-    return booking.save();
+    const result = await booking.save();
+    await this.caregiversService.invalidateCaregiverCache(booking.caregiverId.toString());
+    return result;
   }
 
   async submitReview(
@@ -429,6 +498,103 @@ export class BookingsService {
     );
   }
 
+  private isShortServiceDuration(duration?: string): boolean {
+    const normalized = (duration || '').toLowerCase();
+
+    return (
+      normalized.includes('min') ||
+      (
+        normalized.includes('h') &&
+        !normalized.includes('24h') &&
+        !normalized.includes('12h') &&
+        !normalized.includes('diária') &&
+        !normalized.includes('pernoite')
+      )
+    );
+  }
+
+  private getDateRangeStrings(startDate: Date, endDate: Date): string[] {
+    const dates: string[] = [];
+    const start = this.toLocalDay(startDate);
+    const end = this.toLocalDay(endDate);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(this.formatDateKey(d));
+    }
+
+    return dates;
+  }
+
+  private formatDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  }
+
+  private ensureNotManuallyBlocked(
+    caregiverProfile: any,
+    startDate: Date,
+    endDate: Date,
+    startTime?: string,
+  ): void {
+    const blockedDates = new Set(caregiverProfile.blockedDates || []);
+    const blockedTimeSlots = new Set(caregiverProfile.blockedTimeSlots || []);
+    const dateRange = this.getDateRangeStrings(startDate, endDate);
+    const blockedDate = dateRange.find((date) => blockedDates.has(date));
+
+    if (blockedDate) {
+      throw new BadRequestException('Cuidador indisponível nesta data');
+    }
+
+    if (startTime) {
+      const slotKey = `${dateRange[0]}@${startTime}`;
+
+      if (blockedTimeSlots.has(slotKey)) {
+        throw new BadRequestException('Cuidador indisponível neste horário');
+      }
+    }
+  }
+
+  private ensureCaregiverAvailability(
+    caregiverProfile: any,
+    serviceType: string,
+    serviceName: string,
+    startDate: Date,
+    endDate: Date,
+    startTime?: string,
+  ): void {
+    const availability = caregiverProfile.availability || [];
+
+    if (!availability.length) return;
+
+    const serviceAvailability = availability.find((item: any) =>
+      item.service === serviceType || item.service === serviceName,
+    );
+
+    if (!serviceAvailability) {
+      throw new BadRequestException('Cuidador não possui disponibilidade para este serviço');
+    }
+
+    const availableDays = new Set(serviceAvailability.availableDays || []);
+    const unavailableDate = this
+      .getDateRangeStrings(startDate, endDate)
+      .find((date) => !availableDays.has(date));
+
+    if (unavailableDate) {
+      throw new BadRequestException('Cuidador indisponível nesta data');
+    }
+
+    if (startTime) {
+      const availableHours = new Set(serviceAvailability.serviceHours || []);
+
+      if (!availableHours.has(startTime)) {
+        throw new BadRequestException('Cuidador indisponível neste horário');
+      }
+    }
+  }
+
   private async recalculateCaregiverRating(caregiverId: string): Promise<void> {
     const caregiverObjectId = new Types.ObjectId(caregiverId);
 
@@ -500,4 +666,3 @@ export class BookingsService {
     await this.redisService.set(key, JSON.stringify(calendar), 60 * 60 * 24);
   }
 }
-

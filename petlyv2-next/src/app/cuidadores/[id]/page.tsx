@@ -65,6 +65,8 @@ type CaregiverProfile = {
   price?: number;
   rating?: number;
   reviewsCount?: number;
+  blockedDates?: string[];
+  blockedTimeSlots?: string[]; // format: "YYYY-MM-DD@HH:mm"
 };
 
 const DAYS_OF_WEEK = [
@@ -248,8 +250,9 @@ export default function CaregiverDetailPage() {
   const prevMonth = () => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
 
   const handleDayClick = (dateStr: string) => {
-    // If not available, do nothing
-    if (!availableDatesForService.includes(dateStr)) return;
+    // If not available or blocked, do nothing
+    const isBlocked = caregiver?.blockedDates?.includes(dateStr);
+    if (!availableDatesForService.includes(dateStr) || isBlocked) return;
 
     if (isShortService) {
       setStartDate(dateStr);
@@ -290,7 +293,8 @@ export default function CaregiverDetailPage() {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const dateStr = formatDateToYYYYMMDD(date);
-      const isAvailable = availableDatesForService.includes(dateStr);
+      const isBlocked = caregiver?.blockedDates?.includes(dateStr);
+      const isAvailable = availableDatesForService.includes(dateStr) && !isBlocked;
       const isPast = date < todayObj;
 
       const isStart = startDate === dateStr;
@@ -316,6 +320,9 @@ export default function CaregiverDetailPage() {
           <span>{day}</span>
           {isAvailable && !isPast && !isSelected && (
             <div className="absolute bottom-1 w-1 h-1 rounded-full bg-[#06A77D]"></div>
+          )}
+          {isBlocked && (
+            <div className="absolute bottom-1 w-1 h-1 rounded-full bg-red-500"></div>
           )}
         </button>
       );
@@ -455,7 +462,7 @@ export default function CaregiverDetailPage() {
     }
 
     const todayStr = formatDateToYYYYMMDD(new Date());
-    return dates.filter((d) => d >= todayStr);
+    return dates.filter((d) => d >= todayStr && !caregiver.blockedDates?.includes(d));
   }, [caregiver, selectedService, selectedServiceType]);
 
   const availableHoursForService = useMemo(() => {
@@ -464,8 +471,12 @@ export default function CaregiverDetailPage() {
       (selectedServiceType && a.service === selectedServiceType) ||
       (a.service === selectedService)
     );
-    return serviceAvail?.serviceHours || [];
-  }, [caregiver, selectedService, selectedServiceType]);
+    const hours = serviceAvail?.serviceHours || [];
+
+    if (!startDate) return hours;
+
+    return hours.filter((hour) => !caregiver.blockedTimeSlots?.includes(`${startDate}@${hour}`));
+  }, [caregiver, selectedService, selectedServiceType, startDate]);
 
   const availableDayLabels = useMemo(() => {
     if (availableDatesForService.length > 0) {
@@ -807,6 +818,16 @@ export default function CaregiverDetailPage() {
         setBookingError('Por favor, informe o número da residência.');
         return;
       }
+    }
+
+    if (caregiver?.blockedDates?.some((date) => date >= startDate && date <= endDate)) {
+      setBookingError('O cuidador bloqueou uma ou mais datas desse período.');
+      return;
+    }
+
+    if (isShortService && startTime && caregiver?.blockedTimeSlots?.includes(`${startDate}@${startTime}`)) {
+      setBookingError('O cuidador bloqueou este horário.');
+      return;
     }
 
     // Availability validation
@@ -1286,21 +1307,34 @@ export default function CaregiverDetailPage() {
                             </div>
 
                             <div className="grid grid-cols-3 gap-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
-                              {(availableHoursForService.length > 0 ? availableHoursForService : ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']).map(hour => (
-                                <button
-                                  key={hour}
-                                  onClick={() => {
-                                    setStartTime(hour);
-                                    setIsTimeModalOpen(false);
-                                  }}
-                                  className={`py-2 rounded-lg text-[10px] font-bold transition-all border ${startTime === hour
-                                      ? 'bg-[#FF6B35] text-white border-[#FF6B35]'
-                                      : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20'
+                              {availableHoursForService.map(hour => {
+                                const slotKey = `${startDate}@${hour}`;
+                                const isSlotBlocked = caregiver?.blockedTimeSlots?.includes(slotKey) ?? false;
+                                return (
+                                  <button
+                                    key={hour}
+                                    disabled={isSlotBlocked}
+                                    title={isSlotBlocked ? 'Horário já reservado' : undefined}
+                                    onClick={() => {
+                                      if (isSlotBlocked) return;
+                                      setStartTime(hour);
+                                      setIsTimeModalOpen(false);
+                                    }}
+                                    className={`py-2 rounded-lg text-[10px] font-bold transition-all border relative ${
+                                      isSlotBlocked
+                                        ? 'bg-black/20 text-gray-600 border-white/5 cursor-not-allowed opacity-50 line-through'
+                                        : startTime === hour
+                                          ? 'bg-[#FF6B35] text-white border-[#FF6B35]'
+                                          : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20'
                                     }`}
-                                >
-                                  {hour}
-                                </button>
-                              ))}
+                                  >
+                                    {hour}
+                                    {isSlotBlocked && (
+                                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 border border-black" />
+                                    )}
+                                  </button>
+                                );
+                              })}
                             </div>
 
                             <button

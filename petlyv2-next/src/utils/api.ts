@@ -226,6 +226,17 @@ export async function apiGetCaregiver(id: string): Promise<any> {
   return request(`/caregivers/${id}`);
 }
 
+export async function apiGetMyCaregiverProfile(): Promise<any> {
+  return request('/caregivers/me/profile');
+}
+
+export async function apiUpdateMyCaregiverProfile(payload: any): Promise<any> {
+  return request('/caregivers/me/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export enum ServiceType {
   WALK = 'walk',
   BOARDING = 'boarding',
@@ -447,4 +458,3 @@ export async function apiDeleteProfile(id: string): Promise<any> {
     method: 'DELETE',
   });
 }
-

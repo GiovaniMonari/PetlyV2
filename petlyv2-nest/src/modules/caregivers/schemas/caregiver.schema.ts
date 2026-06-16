@@ -107,6 +107,12 @@ export class CaregiverProfile {
     serviceHours: string[];
   }[];
 
+  @Prop({ type: [String], default: [] })
+  blockedDates!: string[];
+
+  @Prop({ type: [String], default: [] })
+  blockedTimeSlots!: string[];
+
   @Prop({ default: 0 })
   rating!: number;
 

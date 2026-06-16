@@ -31,6 +31,38 @@ export class RedisService {
     return this.redis.del(key);
   }
 
+  async delPattern(pattern: string): Promise<void> {
+    const stream = this.redis.scanStream({
+      match: pattern,
+      count: 100,
+    });
+
+    return new Promise((resolve, reject) => {
+      const pipeline = this.redis.pipeline();
+      let keysFound = false;
+
+      stream.on('data', (keys) => {
+        if (keys.length) {
+          keysFound = true;
+          keys.forEach(key => pipeline.del(key));
+        }
+      });
+
+      stream.on('end', () => {
+        if (keysFound) {
+          pipeline.exec((err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+
+      stream.on('error', (err) => reject(err));
+    });
+  }
+
   async acquireLock(key: string, ttl = 10000): Promise<boolean> {
     const result = await this.redis.set(key, 'locked', 'PX', ttl, 'NX');
     return result === 'OK';

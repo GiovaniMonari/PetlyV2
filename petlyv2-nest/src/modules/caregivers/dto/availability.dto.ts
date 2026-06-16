@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNumber, IsString } from "class-validator";
+import { IsArray, IsEnum, IsString } from "class-validator";
 import { ServiceType } from "./service-dto";
 
 export class AvailabilityDto {
@@ -6,8 +6,7 @@ export class AvailabilityDto {
     @IsString({ each: true })
     availableDays: string[];
 
-    @IsArray()
-    @IsEnum(ServiceType, { each: true })
+    @IsEnum(ServiceType)
     service: ServiceType;
 
     @IsArray()

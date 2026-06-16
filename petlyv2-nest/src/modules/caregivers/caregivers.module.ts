@@ -6,6 +6,7 @@ import { CaregiversService } from './caregivers.service';
 import { CaregiversController } from './caregivers.controller';
 import { User, UserSchema } from '@modules/users/schemas/user.schema';
 import { CaregiverAssembler } from './asssembler/caregiver.assembler';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CaregiverAssembler } from './asssembler/caregiver.assembler';
       { name: Booking.name, schema: BookingSchema },
       { name:User.name, schema: UserSchema },
     ]),
+    RedisModule,
   ],
   controllers: [CaregiversController],
   providers: [CaregiversService, CaregiverAssembler],

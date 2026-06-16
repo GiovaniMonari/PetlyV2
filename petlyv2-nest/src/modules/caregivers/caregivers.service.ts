@@ -21,6 +21,7 @@ import { CaregiverAssembler } from "./asssembler/caregiver.assembler";
 import { CaregiverProfileLean } from "./lean/caregiver.lean";
 import { UserLean } from "@modules/users/lean/user.lean";
 import { SortOrder } from 'mongoose';
+import { RedisService } from 'src/redis/redis.service';
 
 const SERVICE_DEFAULTS: Record<
   ServiceDto["type"],
@@ -61,6 +62,7 @@ export class CaregiversService {
   private reviewModel: Model<BookingDocument>,
 
   private readonly assembler: CaregiverAssembler,
+  private readonly redisService: RedisService,
 
 ) {}
 
@@ -108,6 +110,10 @@ export class CaregiversService {
 async findOne(profileId: string) {
   this.validateId(profileId);
 
+  const cacheKey = `caregiver:profile:${profileId}`;
+  const cached = await this.redisService.get(cacheKey);
+  if (cached) return cached;
+
   const profile = await this.caregiverProfileModel
     .findById(profileId)
     .lean<CaregiverProfileLean>();
@@ -119,13 +125,63 @@ async findOne(profileId: string) {
     .select('name email avatar location isActive role')
     .lean<UserLean>();
 
-  return this.assemble(profile, user);
+  const bookings = await this.reviewModel.find({
+    caregiverId: profile.userId,
+    status: { $in: ['pending', 'confirmed', 'in_progress'] },
+  }).select('startDate endDate startTime endTime').lean();
+
+  const blockedDates: string[] = [];
+  const blockedTimeSlots: string[] = [];
+
+  for (const b of bookings) {
+    if (!b.startDate || !b.endDate) continue;
+
+    const isShortService = !!(b.startTime && b.endTime);
+
+    if (isShortService) {
+      // Short service (e.g. walk, grooming): only block the specific time slot,
+      // not the entire day. Format: "YYYY-MM-DD@HH:mm"
+      const dateStr = new Date(b.startDate).toISOString().split('T')[0];
+      blockedTimeSlots.push(`${dateStr}@${b.startTime}`);
+    } else {
+      // Full-day service (e.g. boarding, daycare): block every day in the range
+      const start = new Date(b.startDate);
+      const end = new Date(b.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        blockedDates.push(d.toISOString().split('T')[0]);
+      }
+    }
+  }
+
+  const manualBlockedDates = Array.isArray(profile.blockedDates)
+    ? profile.blockedDates
+    : [];
+  const manualBlockedTimeSlots = Array.isArray(profile.blockedTimeSlots)
+    ? profile.blockedTimeSlots
+    : [];
+
+  const uniqueBlockedDates = Array.from(new Set([
+    ...manualBlockedDates,
+    ...blockedDates,
+  ]));
+  const uniqueBlockedTimeSlots = Array.from(new Set([
+    ...manualBlockedTimeSlots,
+    ...blockedTimeSlots,
+  ]));
+
+  const result = this.assemble(profile, user, uniqueBlockedDates, uniqueBlockedTimeSlots);
+  await this.redisService.set(cacheKey, JSON.stringify(result), 3600000);
+  return result;
 }
 
   // --------------------------
   // FIND ALL
   // --------------------------
   async findAll() {
+  const cacheKey = 'caregivers:all';
+  const cached = await this.redisService.get(cacheKey);
+  if (cached) return cached;
+
   const profiles = await this.caregiverProfileModel
     .find()
     .lean<CaregiverProfileLean[]>();
@@ -141,7 +197,9 @@ async findOne(profileId: string) {
     users.map(u => [u._id.toString(), u]),
   );
 
-  return this.assembleMany(profiles, userMap);
+  const result = this.assembleMany(profiles, userMap);
+  await this.redisService.set(cacheKey, JSON.stringify(result), 3600000);
+  return result;
 }
 
   // --------------------------
@@ -154,6 +212,10 @@ async findOne(profileId: string) {
     maxPrice?: number;
     sortBy?: string;
   }) {
+    const cacheKey = `caregivers:search:${JSON.stringify(filters)}`;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) return cached;
+
     const query: any = {};
 
     if (filters.type) {
@@ -218,7 +280,9 @@ async findOne(profileId: string) {
       users.map(u => [u._id.toString(), u]),
     );
 
-    return this.assembleMany(profiles, userMap);
+    const result = this.assembleMany(profiles, userMap);
+    await this.redisService.set(cacheKey, JSON.stringify(result), 3600000);
+    return result;
   }
 
   async findProfileByUserId(userId: string) {
@@ -233,6 +297,37 @@ async findOne(profileId: string) {
     }
 
     return profile;
+  }
+
+  async findDashboardProfile(userId: string): Promise<any> {
+    this.validateId(userId);
+
+    const [user, profile] = await Promise.all([
+      this.userModel
+        .findById(userId)
+        .select('name email avatar location isActive role')
+        .lean<UserLean>(),
+      this.caregiverProfileModel
+        .findOne({ userId: new Types.ObjectId(userId) })
+        .lean<CaregiverProfileLean>(),
+    ]);
+
+    if (!profile) {
+      throw new NotFoundException('Perfil do cuidador não encontrado');
+    }
+
+    return {
+      ...profile,
+      user,
+      role: user?.role,
+    };
+  }
+
+  async updateProfileByUserId(userId: string, dto: UpdateCaregiverDto) {
+    this.validateId(userId);
+
+    const profile = await this.findProfileByUserId(userId);
+    return this.updateProfile(profile._id.toString(), dto);
   }
   // --------------------------
   // UPDATE PROFILE (ONLY FIELDS)
@@ -249,6 +344,8 @@ async findOne(profileId: string) {
           petTypes: dto.petTypes,
           petsQuantity: dto.petQuantities,
           availability: dto.availability,
+          blockedDates: dto.blockedDates,
+          blockedTimeSlots: dto.blockedTimeSlots,
         },
       },
       { new: true },
@@ -257,6 +354,8 @@ async findOne(profileId: string) {
     if (!updated) {
       throw new NotFoundException('Caregiver não encontrado');
     }
+
+    await this.invalidateCaregiverCache(id);
 
     return updated;
   }
@@ -289,6 +388,8 @@ async findOne(profileId: string) {
 
     if (!updated) throw new NotFoundException();
 
+    await this.invalidateCaregiverCache(id);
+
     return updated;
   }
 
@@ -315,7 +416,9 @@ async findOne(profileId: string) {
     );
 
     if (updated) {
-      return this.recalculatePrices(updated);
+      const result = await this.recalculatePrices(updated);
+      await this.invalidateCaregiverCache(id);
+      return result;
     }
 
     if (!(await this.caregiverProfileModel.exists({ _id: id }))) {
@@ -335,7 +438,9 @@ async findOne(profileId: string) {
       { new: true },
     );
 
-    return this.recalculatePrices(created!);
+    const result = await this.recalculatePrices(created!);
+    await this.invalidateCaregiverCache(id);
+    return result;
   }
 
   // --------------------------
@@ -344,21 +449,25 @@ async findOne(profileId: string) {
   async addAvailability(id: string, dto: AvailabilityDto) {
     this.validateId(id);
 
-    return this.caregiverProfileModel.findByIdAndUpdate(
+    const result = await this.caregiverProfileModel.findByIdAndUpdate(
       id,
       { $push: { availability: dto } },
       { new: true },
     );
+    await this.invalidateCaregiverCache(id);
+    return result;
   }
 
   async updateAvailability(id: string, dto: AvailabilityDto[]) {
     this.validateId(id);
 
-    return this.caregiverProfileModel.findByIdAndUpdate(
+    const result = await this.caregiverProfileModel.findByIdAndUpdate(
       id,
       { $set: { availability: dto } },
       { new: true },
     );
+    await this.invalidateCaregiverCache(id);
+    return result;
   }
 
   // --------------------------
@@ -375,6 +484,7 @@ async findOne(profileId: string) {
     });
 
     await this.caregiverProfileModel.deleteOne({ _id: id });
+    await this.invalidateCaregiverCache(id);
   }
 
   // --------------------------
@@ -415,10 +525,16 @@ async findOne(profileId: string) {
       rating,
       reviewsCount: ratings.length,
     });
+    await this.invalidateCaregiverCache(caregiverId);
   }
   // --------------------------
   // HELPERS
   // --------------------------
+  async invalidateCaregiverCache(id: string) {
+    await this.redisService.del(`caregiver:profile:${id}`);
+    await this.redisService.del('caregivers:all');
+    await this.redisService.delPattern('caregivers:search:*');
+  }
   private mapServices(services?: ServiceDto[]) {
     if (!services) return [];
 
@@ -441,11 +557,15 @@ async findOne(profileId: string) {
     return profile.save();
   }
 
-  private assemble(profile, user?) {
+  private assemble(profile, user?, blockedDates?: string[], blockedTimeSlots?: string[]) {
   return {
     id: profile._id,
     user,
-    profile,
+    profile: {
+      ...profile,
+      blockedDates: blockedDates || [],
+      blockedTimeSlots: blockedTimeSlots || [],
+    },
   };
 }
 

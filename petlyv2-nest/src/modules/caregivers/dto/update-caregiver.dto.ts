@@ -32,4 +32,14 @@ export class UpdateCaregiverDto extends PartialType(CreateCaregiverDto) {
   @ValidateNested({ each: true })
   @Type(() => AvailabilityDto)
   availability?: AvailabilityDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  blockedDates?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  blockedTimeSlots?: string[];
 }
