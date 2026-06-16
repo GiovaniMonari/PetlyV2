@@ -10,6 +10,8 @@ import {
     Get,
     UseInterceptors,
     UploadedFile,
+    HttpStatus,
+    HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserPetsService } from './user-pets.service';
@@ -48,11 +50,13 @@ export class UserPetsController {
     }
 
     @Post(':id/avatar')
+    @HttpCode(HttpStatus.ACCEPTED)
     @UseInterceptors(FileInterceptor('file'))
     async uploadAvatar(
         @Param('id') id: string,
+        @Param('userId') userId: string,
         @UploadedFile() file: Express.Multer.File,
     ) {
-        return this.userPetsService.uploadPetAvatar(id, file);
+        return this.userPetsService.uploadPetAvatar(id, userId, file);
     }
 }

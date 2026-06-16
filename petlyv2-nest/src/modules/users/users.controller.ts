@@ -11,6 +11,8 @@ import {
   Post,
   UploadedFile,
   UseInterceptors,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -61,10 +63,11 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('avatar')
+  @Post(':id/avatar')
+  @HttpCode(HttpStatus.ACCEPTED)
   @UseInterceptors(FileInterceptor('file'))
-  uploadAvatar(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
-    return this.usersService.uploadAvatar(req.user.userId, file);
+  uploadAvatar(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    return this.usersService.uploadAvatar(id, file);
   }
 
   /**

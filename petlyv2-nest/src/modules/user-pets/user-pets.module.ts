@@ -5,12 +5,14 @@ import { Pet, PetSchema } from "./schemas/pets.schema";
 import { UsersModule } from "../users/users.module";
 import { UserPetsController } from "./user-pets.controller";
 import { CloudinaryModule } from "../cloudinary/cloudinary.module";
+import { ImagesModule } from "@modules/images/images.module";
 
 @Module({
     imports: [
         MongooseModule.forFeature([{ name: Pet.name, schema: PetSchema }]),
         forwardRef(() => CloudinaryModule),
-        forwardRef(() => UsersModule)
+        forwardRef(() => UsersModule),
+        forwardRef(() => ImagesModule)
     ],
     controllers: [UserPetsController],
     providers: [UserPetsService],

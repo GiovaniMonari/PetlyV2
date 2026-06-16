@@ -18,15 +18,22 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    setUser(getUser());
+    // Sincroniza o estado com o localStorage
+    const syncUser = () => setUser(getUser());
     
-    // Listen for storage events to update user info (e.g. avatar change)
-    const handleStorageChange = () => {
-      setUser(getUser());
+    // Atualiza quando o pathname muda (ex: após login)
+    syncUser();
+
+    // Escuta mudanças em outras abas
+    window.addEventListener('storage', syncUser);
+
+    // Escuta o evento personalizado emitido pela página de perfil
+    window.addEventListener('userAvatarChanged', syncUser);
+
+    return () => {
+      window.removeEventListener('storage', syncUser);
+      window.removeEventListener('userAvatarChanged', syncUser);
     };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, [pathname]);
 
   const handleLogout = () => {

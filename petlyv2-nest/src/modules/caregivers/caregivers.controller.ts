@@ -93,6 +93,13 @@ export class CaregiversController {
   // --------------------------
   // SERVICES
   // --------------------------
+
+  @Get('service-types')
+  getServiceTypes() {
+    return this.caregiversService.getServiceTypes();
+  } @Get('/services')
+
+
   @Patch(':id/services')
   updateServices(
     @Param('id') id: string,
@@ -132,6 +139,7 @@ export class CaregiversController {
   // --------------------------
   // REVIEWS
   // --------------------------
+
   @Get(':id/reviews')
   findMyReviews(@Param('id') id: string) {
     return this.caregiversService.findMyReviews(id);

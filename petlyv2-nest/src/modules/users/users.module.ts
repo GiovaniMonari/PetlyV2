@@ -7,6 +7,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { UserPetsModule } from '../user-pets/user-pets.module';
 import { CaregiversModule } from '@modules/caregivers/caregivers.module';
 import { CaregiverProfile, CaregiverProfileSchema } from '@modules/caregivers/schemas/caregiver.schema';
+import { ImagesModule } from '@modules/images/images.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { CaregiverProfile, CaregiverProfileSchema } from '@modules/caregivers/sc
     forwardRef(() => CloudinaryModule),
     forwardRef(() => UserPetsModule),
     forwardRef(() => CaregiversModule),
+    forwardRef(() => ImagesModule)
   ],
   controllers: [UsersController],
   providers: [UsersService],

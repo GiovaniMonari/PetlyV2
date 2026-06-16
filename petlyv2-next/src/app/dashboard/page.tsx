@@ -11,7 +11,6 @@ import {
   XCircle,
   MapPin,
   PlayCircle,
-  TrendingUp,
   AlertCircle,
   DollarSign,
   Activity,
@@ -30,7 +29,12 @@ import {
   apiStartBooking,
   apiCompleteBooking,
   setUser as setLocalUser,
+  setUser,
+  apiGetMyCaregiverProfile,
+  getUser,
 } from '@/utils/api';
+
+// ─── Helpers ────────────────────────────────────────────────
 
 function formatBookingDate(dateStr: string, timeStr?: string): string {
   if (!dateStr) return '';
@@ -40,11 +44,18 @@ function formatBookingDate(dateStr: string, timeStr?: string): string {
     if (timeStr) {
       const [hours, minutes] = timeStr.split(':').map(Number);
       const date = new Date(year, month - 1, day, hours, minutes);
-      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     }
     const date = new Date(year, month - 1, day);
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-  } catch { return 'Data inválida'; }
+  } catch {
+    return 'Data inválida';
+  }
 }
 
 function parseDateOnly(dateStr?: string): Date | null {
@@ -65,11 +76,31 @@ function isTodayInBookingRange(startDate?: string, endDate?: string): boolean {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  confirmed:   { label: 'Confirmada',   color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25', dot: 'bg-emerald-400' },
-  in_progress: { label: 'Em andamento', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/25',          dot: 'bg-cyan-400' },
-  pending:     { label: 'Pendente',     color: 'text-amber-400 bg-amber-500/10 border-amber-500/25',       dot: 'bg-amber-400' },
-  cancelled:   { label: 'Cancelada',    color: 'text-red-400 bg-red-500/10 border-red-500/25',             dot: 'bg-red-400' },
-  completed:   { label: 'Concluída',    color: 'text-blue-400 bg-blue-500/10 border-blue-500/25',          dot: 'bg-blue-400' },
+  confirmed: {
+    label: 'Confirmada',
+    color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
+    dot: 'bg-emerald-400',
+  },
+  in_progress: {
+    label: 'Em andamento',
+    color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/25',
+    dot: 'bg-cyan-400',
+  },
+  pending: {
+    label: 'Pendente',
+    color: 'text-amber-400 bg-amber-500/10 border-amber-500/25',
+    dot: 'bg-amber-400',
+  },
+  cancelled: {
+    label: 'Cancelada',
+    color: 'text-red-400 bg-red-500/10 border-red-500/25',
+    dot: 'bg-red-400',
+  },
+  completed: {
+    label: 'Concluída',
+    color: 'text-blue-400 bg-blue-500/10 border-blue-500/25',
+    dot: 'bg-blue-400',
+  },
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -78,13 +109,18 @@ const PAYMENT_LABELS: Record<string, string> = {
   pix: 'PIX',
 };
 
+// ─── Componente ─────────────────────────────────────────────
+
 export default function DashboardPage() {
   const router = useRouter();
+
+  // Estado do perfil e reservas
   const [profile, setProfile] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
+  // Modal de confirmação com endereço
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [confirmingBookingId, setConfirmingBookingId] = useState<string | null>(null);
   const [cep, setCep] = useState('');
@@ -95,18 +131,25 @@ export default function DashboardPage() {
   const [cepError, setCepError] = useState('');
   const [modalError, setModalError] = useState('');
 
+  // ─── Busca de CEP ─────────────────────────────────────────
   const fetchAddressFromCep = async (cepValue: string) => {
-    const cleanedCep = cepValue.replace(/\D/g, '');
-    if (cleanedCep.length !== 8) return;
+    const cleaned = cepValue.replace(/\D/g, '');
+    if (cleaned.length !== 8) return;
     setIsCepLoading(true);
     setCepError('');
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
-      const data = await response.json();
-      if (data.erro) { setCepError('CEP não encontrado.'); }
-      else { setStreetAddress(`${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`); }
-    } catch { setCepError('Erro ao buscar o CEP.'); }
-    finally { setIsCepLoading(false); }
+      const res = await fetch(`https://viacep.com.br/ws/${cleaned}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError('CEP não encontrado.');
+      } else {
+        setStreetAddress(`${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`);
+      }
+    } catch {
+      setCepError('Erro ao buscar o CEP.');
+    } finally {
+      setIsCepLoading(false);
+    }
   };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,11 +158,100 @@ export default function DashboardPage() {
     if (cleaned.length === 8) fetchAddressFromCep(cleaned);
   };
 
+  // ─── Carregamento inicial ─────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+
+    const loadDashboardData = async () => {
+      try {
+        const localUser = getUser();
+        const userBasic = await apiGetProfile();
+        let profileData = userBasic;
+
+        // Se for cuidador, mescla dados específicos
+        if (localUser?.role === 'caregiver') {
+          const caregiverProfile = await apiGetMyCaregiverProfile();
+          profileData = {
+            ...userBasic,            // name, email, location, avatar, etc.
+            ...caregiverProfile,     // services, availability, rating, reviewsCount, etc.
+            _id: userBasic._id,      // ID do usuário (importante para upload de avatar)
+            role: 'caregiver',
+          };
+        }
+
+        setProfile(profileData);
+        setUser(profileData); // atualiza localStorage
+
+        // Carrega as reservas
+        const bookingsData = await apiGetMyBookings();
+        setBookings(bookingsData || []);
+      } catch (error) {
+        console.error('Erro ao carregar dados do painel:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [router]);
+
+  // ─── Ações de reserva ─────────────────────────────────────
+  const refreshBookings = async () => {
+    const bookingsData = await apiGetMyBookings();
+    setBookings(bookingsData || []);
+  };
+
+  const handleConfirmBooking = async (bookingId: string) => {
+    try {
+      await apiConfirmBooking(bookingId);
+      await refreshBookings();
+    } catch (error) {
+      alert('Erro ao aceitar: ' + (error as Error).message);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!window.confirm('Recusar esta reserva?')) return;
+    try {
+      await apiCancelBooking(bookingId);
+      await refreshBookings();
+    } catch (error) {
+      alert('Erro ao recusar: ' + (error as Error).message);
+    }
+  };
+
+  const handleStartBooking = async (bookingId: string) => {
+    try {
+      await apiStartBooking(bookingId);
+      await refreshBookings();
+    } catch (error) {
+      alert('Erro ao iniciar: ' + (error as Error).message);
+    }
+  };
+
+  const handleCompleteBooking = async (bookingId: string) => {
+    if (!window.confirm('Confirmar que o serviço foi finalizado?')) return;
+    try {
+      await apiCompleteBooking(bookingId);
+      await refreshBookings();
+    } catch (error) {
+      alert('Erro ao finalizar: ' + (error as Error).message);
+    }
+  };
+
+  // ─── Modal de confirmação (endereço) ──────────────────────
   const handleConfirmClick = (booking: any) => {
-    const s = (booking.serviceType || '').toLowerCase();
-    if (s === 'hospedagem' || s === 'banho e tosa' || s === 'creche') {
+    const service = (booking.serviceType || '').toLowerCase();
+    if (service === 'hospedagem' || service === 'banho e tosa' || service === 'creche') {
       setConfirmingBookingId(booking._id);
-      setCep(''); setStreetAddress(''); setHouseNumber(''); setAddressDetails(''); setModalError('');
+      setCep('');
+      setStreetAddress('');
+      setHouseNumber('');
+      setAddressDetails('');
+      setModalError('');
       setIsConfirmModalOpen(true);
     } else {
       handleConfirmBooking(booking._id);
@@ -127,55 +259,32 @@ export default function DashboardPage() {
   };
 
   const handleModalConfirmSubmit = async () => {
-    if (!cep.trim()) { setModalError('Por favor, informe o CEP.'); return; }
-    if (!streetAddress.trim()) { setModalError('Por favor, informe o endereço.'); return; }
-    if (!houseNumber.trim()) { setModalError('Por favor, informe o número.'); return; }
+    if (!cep.trim()) {
+      setModalError('Por favor, informe o CEP.');
+      return;
+    }
+    if (!streetAddress.trim()) {
+      setModalError('Por favor, informe o endereço.');
+      return;
+    }
+    if (!houseNumber.trim()) {
+      setModalError('Por favor, informe o número.');
+      return;
+    }
+
     const fullAddress = `${streetAddress}, nº ${houseNumber}${addressDetails ? ` (${addressDetails})` : ''} - CEP: ${cep}`;
+
     try {
       if (!confirmingBookingId) return;
       await apiConfirmBooking(confirmingBookingId, fullAddress);
       await refreshBookings();
       setIsConfirmModalOpen(false);
-    } catch (error) { setModalError((error as Error).message); }
+    } catch (error) {
+      setModalError((error as Error).message);
+    }
   };
 
-  useEffect(() => {
-    if (!isAuthenticated()) { router.push('/login'); return; }
-    const fetchData = async () => {
-      try {
-        const [profileData, bookingsData] = await Promise.all([apiGetProfile(), apiGetMyBookings()]);
-        if (profileData.role !== 'caregiver') { router.push('/'); return; }
-        setProfile(profileData);
-        setBookings(bookingsData || []);
-      } catch { /* noop */ } finally { setIsLoading(false); }
-    };
-    fetchData();
-  }, [router]);
-
-  const refreshBookings = async () => {
-    const bookingsData = await apiGetMyBookings();
-    setBookings(bookingsData || []);
-  };
-
-  const handleConfirmBooking = async (bookingId: string) => {
-    try { await apiConfirmBooking(bookingId); await refreshBookings(); }
-    catch (error) { alert('Erro ao aceitar: ' + (error as Error).message); }
-  };
-  const handleCancelBooking = async (bookingId: string) => {
-    if (!window.confirm('Recusar esta reserva?')) return;
-    try { await apiCancelBooking(bookingId); await refreshBookings(); }
-    catch (error) { alert('Erro ao recusar: ' + (error as Error).message); }
-  };
-  const handleStartBooking = async (bookingId: string) => {
-    try { await apiStartBooking(bookingId); await refreshBookings(); }
-    catch (error) { alert('Erro ao iniciar: ' + (error as Error).message); }
-  };
-  const handleCompleteBooking = async (bookingId: string) => {
-    if (!window.confirm('Confirmar que o serviço foi finalizado?')) return;
-    try { await apiCompleteBooking(bookingId); await refreshBookings(); }
-    catch (error) { alert('Erro ao finalizar: ' + (error as Error).message); }
-  };
-
+  // ─── Loading ──────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
@@ -192,22 +301,24 @@ export default function DashboardPage() {
 
   if (!profile) return null;
 
-  const pendingBookings = bookings.filter(b => b.status === 'pending');
-  const activeBookings  = bookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress');
-  const completedBookings = bookings.filter(b => b.status === 'completed');
-  const totalEarnings   = completedBookings.reduce((acc, b) => acc + (b.totalPrice || 0), 0);
-  const isProfileComplete = profile.services?.length > 0 && profile.availableDays?.length > 0;
+  // ─── Dados derivados ──────────────────────────────────────
+  const pendingBookings = bookings.filter((b) => b.status === 'pending');
+  const activeBookings = bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress');
+  const completedBookings = bookings.filter((b) => b.status === 'completed');
+  const totalEarnings = completedBookings.reduce((acc, b) => acc + (b.totalPrice || 0), 0);
+  const isProfileComplete = profile.services?.length > 0 && profile.availability?.length > 0;
 
-  const filteredBookings = filterStatus === 'all' ? bookings : bookings.filter(b => b.status === filterStatus);
+  const filteredBookings =
+    filterStatus === 'all' ? bookings : bookings.filter((b) => b.status === filterStatus);
 
+  // ─── Render ───────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
       <Navbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col md:flex-row gap-8">
-
-          {/* ── Sidebar ── */}
+          {/* Sidebar */}
           <DashboardSidebar
             profile={profile}
             onProfileUpdate={(updated) => {
@@ -216,14 +327,15 @@ export default function DashboardPage() {
             }}
           />
 
-          {/* ── Main Content ── */}
+          {/* Conteúdo principal */}
           <div className="flex-1 min-w-0 space-y-6">
-
-            {/* Welcome header */}
+            {/* Cabeçalho de boas-vindas */}
             <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#1a0f08] via-[#150d06] to-[#0a0a0a] border border-[#FF6B35]/20 p-7 shadow-2xl">
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF6B35]/10 blur-[80px] rounded-full translate-x-1/3 -translate-y-1/3 pointer-events-none" />
               <div className="relative">
-                <p className="text-[#FF6B35] text-xs font-bold uppercase tracking-widest mb-1">Painel do Cuidador</p>
+                <p className="text-[#FF6B35] text-xs font-bold uppercase tracking-widest mb-1">
+                  Painel do Cuidador
+                </p>
                 <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
                   Olá, {profile.name.split(' ')[0]}!
                 </h1>
@@ -235,35 +347,47 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Profile incomplete warning */}
+            {/* Alerta de perfil incompleto */}
             {!isProfileComplete && (
               <div className="flex items-start gap-4 bg-amber-500/8 border border-amber-500/25 rounded-2xl p-5">
                 <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0">
                   <AlertCircle className="w-5 h-5 text-amber-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-amber-400 font-bold mb-1">Perfil incompleto — não aparece nas buscas</h3>
-                  <p className="text-amber-400/70 text-sm mb-3">Configure seus serviços e dias disponíveis para receber reservas.</p>
-                  <Link href="/dashboard/servicos" className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-amber-950 font-bold text-sm rounded-xl hover:bg-amber-400 transition-colors">
+                  <h3 className="text-amber-400 font-bold mb-1">
+                    Perfil incompleto — não aparece nas buscas
+                  </h3>
+                  <p className="text-amber-400/70 text-sm mb-3">
+                    Configure seus serviços e dias disponíveis para receber reservas.
+                  </p>
+                  <Link
+                    href="/dashboard/servicos"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-amber-950 font-bold text-sm rounded-xl hover:bg-amber-400 transition-colors"
+                  >
                     Configurar agora <ChevronRight className="w-4 h-4" />
                   </Link>
                 </div>
               </div>
             )}
 
-            {/* Stats cards */}
+            {/* Cards de estatísticas */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'Pendentes', value: pendingBookings.length, icon: Clock, color: '#F59E0B', glow: 'bg-amber-500/10' },
-                { label: 'Ativas', value: activeBookings.length, icon: Activity, color: '#06A77D', glow: 'bg-emerald-500/10' },
-                { label: 'Concluídas', value: completedBookings.length, icon: CheckCircle2, color: '#3B82F6', glow: 'bg-blue-500/10' },
-                { label: 'Ganhos Totais', value: `R$ ${totalEarnings.toFixed(0)}`, icon: DollarSign, color: '#FF6B35', glow: 'bg-orange-500/10', wide: true },
-              ].map(({ label, value, icon: Icon, color, glow }) => (
-                <div key={label} className="relative bg-white/4 hover:bg-white/6 border border-white/8 hover:border-white/15 rounded-2xl p-5 overflow-hidden transition-all duration-300 group cursor-default">
-                  <div className={`absolute top-0 right-0 w-24 h-24 ${glow} blur-2xl rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none`} />
+                { label: 'Pendentes', value: pendingBookings.length, icon: Clock, color: '#F59E0B' },
+                { label: 'Ativas', value: activeBookings.length, icon: Activity, color: '#06A77D' },
+                { label: 'Concluídas', value: completedBookings.length, icon: CheckCircle2, color: '#3B82F6' },
+                { label: 'Ganhos Totais', value: `R$ ${totalEarnings.toFixed(0)}`, icon: DollarSign, color: '#FF6B35' },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div
+                  key={label}
+                  className="relative bg-white/4 hover:bg-white/6 border border-white/8 hover:border-white/15 rounded-2xl p-5 overflow-hidden transition-all duration-300 group cursor-default"
+                >
                   <div className="relative">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: `${color}15` }}
+                      >
                         <Icon className="w-4 h-4" style={{ color }} />
                       </div>
                     </div>
@@ -274,9 +398,9 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            {/* Bookings section */}
+            {/* Seção de reservas */}
             <div className="space-y-4">
-              {/* Section header + filter */}
+              {/* Cabeçalho + filtros */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                 <h2 className="text-lg font-bold text-white">Solicitações de Reserva</h2>
                 <div className="flex gap-2 flex-wrap">
@@ -286,7 +410,7 @@ export default function DashboardPage() {
                     { value: 'confirmed', label: 'Confirmadas' },
                     { value: 'in_progress', label: 'Em andamento' },
                     { value: 'completed', label: 'Concluídas' },
-                  ].map(opt => (
+                  ].map((opt) => (
                     <button
                       key={opt.value}
                       onClick={() => setFilterStatus(opt.value)}
@@ -302,7 +426,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Booking cards */}
+              {/* Lista de reservas */}
               {filteredBookings.length === 0 ? (
                 <div className="bg-white/4 border border-white/8 rounded-3xl p-14 text-center flex flex-col items-center">
                   <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
@@ -319,22 +443,26 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {filteredBookings.map((booking) => {
                     const canStartToday = isTodayInBookingRange(booking.startDate, booking.endDate);
-                    const status = STATUS_CONFIG[booking.status] || { label: booking.status, color: 'text-gray-400 bg-gray-500/10 border-gray-500/20', dot: 'bg-gray-400' };
+                    const status = STATUS_CONFIG[booking.status] || {
+                      label: booking.status,
+                      color: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+                      dot: 'bg-gray-400',
+                    };
 
                     return (
                       <div
                         key={booking._id}
                         className="relative bg-white/4 hover:bg-white/6 border border-white/8 hover:border-white/15 rounded-2xl overflow-hidden transition-all duration-300 group"
                       >
-                        {/* Color accent strip */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${status.dot}`} />
 
                         <div className="pl-5 pr-5 py-5 flex flex-col sm:flex-row gap-5">
-                          {/* Left: info */}
+                          {/* Informações */}
                           <div className="flex-1 min-w-0 space-y-4">
-                            {/* Status + date created */}
                             <div className="flex flex-wrap items-center gap-3">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border ${status.color}`}>
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border ${status.color}`}
+                              >
                                 <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
                                 {status.label}
                               </span>
@@ -344,10 +472,11 @@ export default function DashboardPage() {
                               </span>
                             </div>
 
-                            {/* Grid of details */}
                             <div className="grid sm:grid-cols-2 gap-3">
                               <div>
-                                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Período</p>
+                                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                                  Período
+                                </p>
                                 <div className="text-sm text-white font-medium bg-black/30 px-3 py-2 rounded-xl border border-white/5">
                                   {formatBookingDate(booking.startDate, booking.startTime)}
                                   <span className="text-gray-600 mx-2">→</span>
@@ -356,7 +485,9 @@ export default function DashboardPage() {
                               </div>
 
                               <div>
-                                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Serviço</p>
+                                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                                  Serviço
+                                </p>
                                 <div className="text-sm text-white font-medium bg-black/30 px-3 py-2 rounded-xl border border-white/5 flex items-center gap-2">
                                   <PawPrint className="w-3.5 h-3.5 text-[#FF6B35] flex-shrink-0" />
                                   <span className="truncate">{booking.serviceType}</span>
@@ -364,19 +495,29 @@ export default function DashboardPage() {
                               </div>
 
                               <div className="sm:col-span-2">
-                                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Pet do Tutor</p>
+                                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                                  Pet do Tutor
+                                </p>
                                 <div className="text-sm text-white font-medium bg-black/30 px-3 py-2 rounded-xl border border-white/5 flex items-center gap-2 flex-wrap">
                                   <PawPrint className="w-3.5 h-3.5 text-[#FF6B35] flex-shrink-0" />
                                   {booking.petId ? (
                                     <>
                                       <strong>{booking.petId.name}</strong>
-                                      {booking.petId.breed && <span className="text-gray-400 text-xs">({booking.petId.breed})</span>}
+                                      {booking.petId.breed && (
+                                        <span className="text-gray-400 text-xs">({booking.petId.breed})</span>
+                                      )}
                                       {booking.petId.age !== undefined && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded-lg bg-white/5 text-gray-400">{booking.petId.age} {booking.petId.age === 1 ? 'ano' : 'anos'}</span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded-lg bg-white/5 text-gray-400">
+                                          {booking.petId.age} {booking.petId.age === 1 ? 'ano' : 'anos'}
+                                        </span>
                                       )}
                                       {booking.petId.size && (
                                         <span className="text-xs px-1.5 py-0.5 rounded-lg bg-white/5 text-gray-400">
-                                          {booking.petId.size === 'small' ? 'Pequeno' : booking.petId.size === 'medium' ? 'Médio' : 'Grande'}
+                                          {booking.petId.size === 'small'
+                                            ? 'Pequeno'
+                                            : booking.petId.size === 'medium'
+                                            ? 'Médio'
+                                            : 'Grande'}
                                         </span>
                                       )}
                                     </>
@@ -388,15 +529,19 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* Right: price + actions */}
+                          {/* Preço e ações */}
                           <div className="sm:w-52 bg-black/25 rounded-2xl border border-white/5 p-4 flex flex-col justify-between">
                             <div>
                               <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
                                 Total ({booking.totalDays} {booking.totalDays === 1 ? 'dia' : 'dias'})
                               </p>
-                              <p className="text-2xl font-bold text-white mb-1">R$ {(booking.totalPrice || 0).toFixed(0)}</p>
+                              <p className="text-2xl font-bold text-white mb-1">
+                                R$ {(booking.totalPrice || 0).toFixed(0)}
+                              </p>
                               <p className="text-xs text-gray-500">
-                                {PAYMENT_LABELS[booking.paymentMethod] || booking.paymentMethod || 'Não informado'}
+                                {PAYMENT_LABELS[booking.paymentMethod] ||
+                                  booking.paymentMethod ||
+                                  'Não informado'}
                               </p>
                             </div>
 
@@ -422,7 +567,11 @@ export default function DashboardPage() {
                                 <button
                                   onClick={() => handleStartBooking(booking._id)}
                                   disabled={!canStartToday}
-                                  title={canStartToday ? 'Iniciar serviço' : 'Disponível apenas no dia agendado'}
+                                  title={
+                                    canStartToday
+                                      ? 'Iniciar serviço'
+                                      : 'Disponível apenas no dia agendado'
+                                  }
                                   className={`w-full py-2.5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                                     canStartToday
                                       ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white shadow-lg shadow-cyan-500/20'
@@ -455,7 +604,7 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* ── Address Confirm Modal ── */}
+      {/* Modal de confirmação de endereço */}
       {isConfirmModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-[#141414] border border-white/10 rounded-3xl w-full max-w-md p-6 shadow-2xl">
@@ -467,7 +616,10 @@ export default function DashboardPage() {
                 <h3 className="text-white font-bold">Confirmar Endereço</h3>
                 <p className="text-xs text-gray-500">Compartilhado com o tutor após confirmação</p>
               </div>
-              <button onClick={() => setIsConfirmModalOpen(false)} className="ml-auto text-gray-500 hover:text-white transition-colors">
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="ml-auto text-gray-500 hover:text-white transition-colors"
+              >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
@@ -476,29 +628,50 @@ export default function DashboardPage() {
               <div>
                 <label className="block text-xs font-semibold text-gray-400 mb-1.5">CEP</label>
                 <div className="relative">
-                  <input type="text" value={cep} onChange={handleCepChange} placeholder="00000-000"
+                  <input
+                    type="text"
+                    value={cep}
+                    onChange={handleCepChange}
+                    placeholder="00000-000"
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 transition-all"
                   />
-                  {isCepLoading && <Loader2 className="w-4 h-4 text-[#FF6B35] animate-spin absolute right-3 top-3" />}
+                  {isCepLoading && (
+                    <Loader2 className="w-4 h-4 text-[#FF6B35] animate-spin absolute right-3 top-3" />
+                  )}
                 </div>
                 {cepError && <p className="text-red-400 text-xs mt-1">{cepError}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-400 mb-1.5">Endereço</label>
-                <input type="text" value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} placeholder="Rua, Bairro, Cidade - UF" disabled={isCepLoading}
+                <input
+                  type="text"
+                  value={streetAddress}
+                  onChange={(e) => setStreetAddress(e.target.value)}
+                  placeholder="Rua, Bairro, Cidade - UF"
+                  disabled={isCepLoading}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 transition-all disabled:opacity-50"
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 mb-1.5">Número</label>
-                  <input type="text" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} placeholder="123"
+                  <input
+                    type="text"
+                    value={houseNumber}
+                    onChange={(e) => setHouseNumber(e.target.value)}
+                    placeholder="123"
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 transition-all"
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-400 mb-1.5">Complemento (opcional)</label>
-                  <input type="text" value={addressDetails} onChange={(e) => setAddressDetails(e.target.value)} placeholder="Apto 42, Bloco B"
+                  <label className="block text-xs font-semibold text-gray-400 mb-1.5">
+                    Complemento (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={addressDetails}
+                    onChange={(e) => setAddressDetails(e.target.value)}
+                    placeholder="Apto 42, Bloco B"
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 transition-all"
                   />
                 </div>
@@ -512,12 +685,16 @@ export default function DashboardPage() {
             )}
 
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setIsConfirmModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-semibold transition-all">
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-semibold transition-all"
+              >
                 Cancelar
               </button>
-              <button onClick={handleModalConfirmSubmit}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-bold transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20">
+              <button
+                onClick={handleModalConfirmSubmit}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-bold transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+              >
                 <CheckCircle2 className="w-4 h-4" /> Confirmar
               </button>
             </div>

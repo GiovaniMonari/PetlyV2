@@ -12,9 +12,12 @@ import {
   LogOut,
   ShieldCheck,
   TrendingUp,
+  Camera,
+  Loader2,
 } from 'lucide-react';
-import ProfilePhotoUpload from './ProfilePhotoUpload';
-import { logout } from '@/utils/api';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import Image from 'next/image';
+import { logout, setUser, getUser, apiUploadAvatar, pollAvatarReady } from '@/utils/api';
 
 interface DashboardSidebarProps {
   profile: any;
@@ -30,36 +33,166 @@ const NAV_ITEMS = [
   { href: '/perfil', label: 'Meu Perfil', icon: User },
 ];
 
+type AvatarUploadStatus = 'idle' | 'uploading' | 'processing' | 'done' | 'error';
+
 export default function DashboardSidebar({ profile, onProfileUpdate }: DashboardSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Estado do upload de avatar
+  const [avatarState, setAvatarState] = useState<{
+    status: AvatarUploadStatus;
+    previewUrl: string | null;
+  }>({ status: 'idle', previewUrl: null });
+  
+  const blobUrlRef = useRef<string | null>(null);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    };
+  }, []);
+
+  const revokeBlob = useCallback(() => {
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+  }, []);
+
+  const uploadAvatar = useCallback(
+    async (userId: string, file: File, currentAvatar?: string) => {
+      revokeBlob();
+      const blobUrl = URL.createObjectURL(file);
+      blobUrlRef.current = blobUrl;
+      setAvatarState({ status: 'uploading', previewUrl: blobUrl });
+
+      try {
+        await apiUploadAvatar(userId, file);
+        setAvatarState({ status: 'processing', previewUrl: blobUrl });
+
+        const newUrl = await pollAvatarReady(currentAvatar, {
+          intervalMs: 3000,
+          timeoutMs: 60000,
+        });
+
+        if (newUrl) {
+          revokeBlob();
+          setAvatarState({ status: 'done', previewUrl: newUrl });
+          return newUrl;
+        } else {
+          setAvatarState((prev) => ({ ...prev, status: 'done' }));
+          return null;
+        }
+      } catch (err: any) {
+        revokeBlob();
+        setAvatarState({ status: 'error', previewUrl: null });
+        throw err;
+      }
+    },
+    [revokeBlob]
+  );
+
+  const openFilePicker = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file && profile) {
+        if (!file.type.startsWith('image/')) {
+          alert('Por favor, selecione uma imagem válida.');
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          alert('A imagem deve ter no máximo 5MB.');
+          return;
+        }
+        try {
+          const userId = profile.userId?._id || profile.userId || profile._id;
+          const newAvatarUrl = await uploadAvatar(userId, file, profile.avatar);
+          if (newAvatarUrl) {
+            // 1. Callback local
+            const updatedProfile = { ...profile, avatar: newAvatarUrl };
+            if (onProfileUpdate) onProfileUpdate(updatedProfile);
+
+            // 2. Persiste no localStorage
+            const currentUser = getUser();
+            if (currentUser) {
+              setUser({ ...currentUser, avatar: newAvatarUrl });
+            }
+
+            // 3. Notifica a Navbar
+            window.dispatchEvent(new Event('userAvatarChanged'));
+          }
+        } catch (err: any) {
+          alert(err?.message || 'Erro ao atualizar foto.');
+        }
+      }
+    };
+    input.click();
+  };
 
   const handleLogout = () => {
     logout();
     router.push('/');
   };
 
+  const displayAvatar = avatarState.previewUrl ?? profile?.avatar ?? null;
+  const isUploading = avatarState.status === 'uploading' || avatarState.status === 'processing';
+
   return (
     <aside className="md:w-72 flex-shrink-0">
       {/* Profile Card */}
       <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#111] to-[#0a0a0a] border border-white/10 mb-4 shadow-2xl">
-        {/* Glow background */}
         <div className="absolute top-0 left-0 w-40 h-40 bg-[#FF6B35]/10 blur-[60px] rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
 
         <div className="relative p-6">
           {/* Avatar */}
           <div className="flex flex-col items-center text-center mb-6">
             <div className="relative mb-4">
-              <ProfilePhotoUpload
-                currentAvatar={profile.avatar}
-                userName={profile.name}
-                onUploadSuccess={(newAvatarUrl) => {
-                  const updatedProfile = { ...profile, avatar: newAvatarUrl };
-                  if (onProfileUpdate) onProfileUpdate(updatedProfile);
-                  localStorage.setItem('petly_user', JSON.stringify(updatedProfile));
-                  window.dispatchEvent(new Event('storage'));
-                }}
-              />
+              <div className="relative w-24 h-24 rounded-full overflow-hidden bg-white/10 group">
+                {displayAvatar ? (
+                  <Image
+                    src={displayAvatar}
+                    alt={profile.name}
+                    fill
+                    className="object-cover"
+                    unoptimized={displayAvatar.startsWith('blob:')}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <User className="w-10 h-10 text-white/40" />
+                  </div>
+                )}
+
+                {/* Overlay de upload */}
+                {isUploading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-full z-10">
+                    <Loader2 className="w-7 h-7 text-white animate-spin mb-1" />
+                    <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
+                      {avatarState.status === 'uploading' ? 'Enviando...' : 'Processando...'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Botão de câmera no hover */}
+                {!isUploading && (
+                  <button
+                    onClick={openFilePicker}
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-full cursor-pointer"
+                    title="Alterar foto de perfil"
+                  >
+                    <div className="flex flex-col items-center gap-1.5">
+                      <Camera className="w-7 h-7 text-white drop-shadow-lg" />
+                      <span className="text-xs font-semibold text-white/90 drop-shadow-md">
+                        Alterar foto
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
             </div>
             <h3 className="text-white font-bold text-base leading-tight mb-1">{profile.name}</h3>
             <div className="flex items-center gap-1.5">

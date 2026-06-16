@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   CheckCircle2,
   Loader2,
+  AlertCircle,
   PawPrint,
   Dog,
   Cat,
@@ -19,9 +20,11 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import {
   apiGetCaregiverPetTypes,
   apiGetProfile,
-  apiUpdateProfile,
+  apiGetMyCaregiverProfile,
+  apiUpdateMyCaregiverProfile,
   isAuthenticated,
   setUser as setLocalUser,
+  getUser,
 } from '@/utils/api';
 
 const DOG_SIZE_OPTIONS = [
@@ -29,6 +32,8 @@ const DOG_SIZE_OPTIONS = [
   { value: 'medium', label: 'Médio', range: '10–25 kg' },
   { value: 'large', label: 'Grande', range: 'acima de 25 kg' },
 ];
+
+const DEFAULT_PET_TYPES = ['dog', 'cat', 'bird', 'other'];
 
 const PET_LABELS: Record<string, string> = {
   dog: 'Cães', cat: 'Gatos', bird: 'Pássaros', other: 'Outros',
@@ -45,32 +50,100 @@ const PET_COLORS: Record<string, string> = {
 export default function CapacidadePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
-  const [petTypeOptions, setPetTypeOptions] = useState<string[]>([]);
+  const [petTypeOptions, setPetTypeOptions] = useState<string[]>(DEFAULT_PET_TYPES);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [editForm, setEditForm] = useState<any>({ petQuantities: [] });
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.push('/login'); return; }
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+
     const fetchData = async () => {
       try {
-        const [profileData, caregiverPetTypes] = await Promise.all([apiGetProfile(), apiGetCaregiverPetTypes()]);
-        if (profileData.role !== 'caregiver') { router.push('/'); return; }
-        setPetTypeOptions((caregiverPetTypes as any) || []);
-        setProfile(profileData);
-        setEditForm({ petQuantities: profileData.petsQuantity || [] });
-      } catch { /* noop */ } finally { setIsLoading(false); }
+        const userBasic = await apiGetProfile();
+
+        if (userBasic.role !== 'caregiver') {
+          router.push('/');
+          return;
+        }
+
+        // Tipos de pet (fallback se endpoint falhar)
+        try {
+          const backendTypes = await apiGetCaregiverPetTypes();
+          if (backendTypes && backendTypes.length > 0) {
+            const types = backendTypes.map((t: any) =>
+              typeof t === 'string' ? t : t.name || t.type
+            );
+            setPetTypeOptions(types);
+          }
+        } catch (err) {
+          console.warn('Usando tipos de pet padrão (fallback).');
+        }
+
+        // Mesclar perfil do cuidador
+        let mergedProfile = { ...userBasic, petsQuantity: [], availability: [] };
+        try {
+          const caregiverProfile = await apiGetMyCaregiverProfile();
+          mergedProfile = {
+            ...userBasic,
+            ...caregiverProfile,
+            _id: userBasic._id,
+            role: 'caregiver',
+          };
+        } catch (caregiverErr: any) {
+          if (caregiverErr?.message?.includes('401')) {
+            router.push('/login');
+            return;
+          }
+          setErrorMsg('Perfil de cuidador ainda não configurado. Defina sua capacidade abaixo.');
+        }
+
+        setProfile(mergedProfile);
+        setLocalUser(mergedProfile);
+
+        // Inicializar formulário com os dados atuais
+        const currentPetQuantities = (mergedProfile.petsQuantity || []).map((p: any) => ({
+          type: p.type,
+          quantity: p.quantity || 1,
+          sizes: p.sizes || (p.type === 'dog' ? ['small'] : []),
+        }));
+
+        setEditForm({ petQuantities: currentPetQuantities });
+      } catch (error: any) {
+        if (error?.message?.includes('401') || error?.message?.includes('403')) {
+          router.push('/login');
+        } else {
+          console.error('Erro ao carregar dados:', error);
+          setErrorMsg('Não foi possível carregar seus dados. Verifique sua conexão.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
+
     fetchData();
   }, [router]);
 
   const handlePetTypeChange = (petType: string, isChecked: boolean) => {
     setEditForm((prev: any) => {
       if (isChecked) {
-        return { ...prev, petQuantities: [...prev.petQuantities, { type: petType, quantity: 1, ...(petType === 'dog' ? { sizes: ['small'] } : {}) }] };
+        return {
+          ...prev,
+          petQuantities: [
+            ...prev.petQuantities,
+            { type: petType, quantity: 1, sizes: petType === 'dog' ? ['small'] : [] },
+          ],
+        };
       }
-      return { ...prev, petQuantities: prev.petQuantities.filter((p: any) => p.type !== petType) };
+      return {
+        ...prev,
+        petQuantities: prev.petQuantities.filter((p: any) => p.type !== petType),
+      };
     });
   };
 
@@ -78,7 +151,9 @@ export default function CapacidadePage() {
     setEditForm((prev: any) => ({
       ...prev,
       petQuantities: prev.petQuantities.map((p: any) =>
-        p.type === petType ? { ...p, quantity: Math.max(1, Math.min(20, (p.quantity || 1) + delta)) } : p
+        p.type === petType
+          ? { ...p, quantity: Math.max(1, Math.min(20, (p.quantity || 1) + delta)) }
+          : p
       ),
     }));
   };
@@ -98,15 +173,47 @@ export default function CapacidadePage() {
   const handleSave = async () => {
     setIsSaving(true);
     setSuccessMsg('');
+    setErrorMsg('');
     try {
-      const updated = await apiUpdateProfile(profile._id, { petQuantities: editForm.petQuantities });
-      setProfile(updated);
-      setLocalUser(updated);
-      setEditForm({ petQuantities: updated.petsQuantity || [] });
+      // Monta payload para o cuidador (campo petQuantities, conforme esperado pelo backend)
+      const payload = {
+        petQuantities: editForm.petQuantities.map((p: any) => ({
+          type: p.type,
+          quantity: p.quantity,
+          sizes: p.sizes || [],
+        })),
+      };
+
+      const updatedCaregiver = await apiUpdateMyCaregiverProfile(payload);
+
+      // Mescla novamente com dados básicos do usuário
+      const userBasic = await apiGetProfile();
+      const mergedUpdated = {
+        ...userBasic,
+        ...updatedCaregiver,
+        _id: userBasic._id,
+        role: 'caregiver',
+      };
+
+      setProfile(mergedUpdated);
+      setLocalUser(mergedUpdated);
+
+      // Atualiza formulário com dados retornados
+      setEditForm({
+        petQuantities: (updatedCaregiver.petsQuantity || []).map((p: any) => ({
+          type: p.type,
+          quantity: p.quantity,
+          sizes: p.sizes || [],
+        })),
+      });
+
       setSuccessMsg('Capacidade atualizada com sucesso!');
       setTimeout(() => setSuccessMsg(''), 3000);
-    } catch { alert('Erro ao salvar.'); }
-    finally { setIsSaving(false); }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Erro ao salvar capacidade.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -120,7 +227,27 @@ export default function CapacidadePage() {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center text-white text-center px-4">
+          <div>
+            <AlertCircle className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
+            <p className="text-lg font-bold mb-2">Erro ao carregar perfil</p>
+            <p className="text-gray-400 text-sm">{errorMsg || 'Tente recarregar a página.'}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-[#FF6B35] text-white rounded-xl font-semibold hover:bg-[#E55A2B] transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
@@ -128,7 +255,13 @@ export default function CapacidadePage() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col md:flex-row gap-8">
-          <DashboardSidebar profile={profile} onProfileUpdate={(u) => { setProfile(u); setLocalUser(u); }} />
+          <DashboardSidebar
+            profile={profile}
+            onProfileUpdate={(u) => {
+              setProfile(u);
+              setLocalUser(u);
+            }}
+          />
 
           <div className="flex-1 min-w-0 space-y-6">
             {/* Header */}
@@ -147,6 +280,12 @@ export default function CapacidadePage() {
               </button>
             </div>
 
+            {errorMsg && (
+              <div className="flex items-center gap-3 bg-amber-500/8 border border-amber-500/25 text-amber-400 px-4 py-3 rounded-2xl text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {errorMsg}
+              </div>
+            )}
+
             {successMsg && (
               <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 px-4 py-3 rounded-2xl text-sm font-semibold">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {successMsg}
@@ -155,8 +294,8 @@ export default function CapacidadePage() {
 
             {/* Pet type cards */}
             <div className="grid sm:grid-cols-2 gap-4">
-              {petTypeOptions.map((petType: any) => {
-                const typeValue = typeof petType === 'string' ? petType : petType.name || petType.type;
+              {petTypeOptions.map((petTypeValue) => {
+                const typeValue = typeof petTypeValue === 'string' ? petTypeValue : (petTypeValue as any).name || (petTypeValue as any).type;
                 const isSelected = editForm.petQuantities?.some((p: any) => p.type === typeValue);
                 const petData = editForm.petQuantities?.find((p: any) => p.type === typeValue);
                 const Icon = PET_ICONS[typeValue] || PawPrint;
@@ -167,13 +306,10 @@ export default function CapacidadePage() {
                   <div
                     key={typeValue}
                     className={`rounded-3xl border transition-all duration-200 overflow-hidden ${
-                      isSelected
-                        ? 'border-white/20 bg-white/5'
-                        : 'border-white/8 bg-white/3 hover:border-white/15'
+                      isSelected ? 'border-white/20 bg-white/5' : 'border-white/8 bg-white/3 hover:border-white/15'
                     }`}
                     style={isSelected ? { boxShadow: `0 0 0 1px ${color}20, inset 0 0 40px ${color}08` } : {}}
                   >
-                    {/* Card header */}
                     <div className="flex items-center gap-4 p-5 cursor-pointer" onClick={() => handlePetTypeChange(typeValue, !isSelected)}>
                       <div
                         className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -187,21 +323,16 @@ export default function CapacidadePage() {
                           {isSelected ? `${petData?.quantity || 1} pet${(petData?.quantity || 1) > 1 ? 's' : ''} por vez` : 'Clique para ativar'}
                         </p>
                       </div>
-                      {/* Toggle */}
                       <div
                         className="w-12 h-6 rounded-full relative transition-all duration-300 flex-shrink-0"
                         style={{ backgroundColor: isSelected ? color : 'rgba(255,255,255,0.1)' }}
                       >
-                        <div
-                          className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${isSelected ? 'right-1' : 'left-1'}`}
-                        />
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${isSelected ? 'right-1' : 'left-1'}`} />
                       </div>
                     </div>
 
-                    {/* Quantity + dog sizes (only when selected) */}
                     {isSelected && (
                       <div className="px-5 pb-5 space-y-4 border-t border-white/5 pt-4">
-                        {/* Quantity stepper */}
                         <div>
                           <p className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">Limite por atendimento</p>
                           <div className="flex items-center gap-4">
@@ -226,7 +357,6 @@ export default function CapacidadePage() {
                           </div>
                         </div>
 
-                        {/* Dog sizes */}
                         {typeValue === 'dog' && (
                           <div>
                             <p className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">Porte aceito</p>

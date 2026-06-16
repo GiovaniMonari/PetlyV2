@@ -2,12 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Star, Calendar, Loader2, AlertCircle, TrendingUp, Award, MessageSquare } from 'lucide-react';
+import {
+  Star,
+  Calendar,
+  Loader2,
+  AlertCircle,
+  TrendingUp,
+  Award,
+  MessageSquare,
+} from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import {
   apiGetProfile,
+  apiGetMyCaregiverProfile,
   apiGetCaregiverReviews,
   isAuthenticated,
   setUser as setLocalUser,
@@ -36,11 +45,25 @@ function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
 
 function formatDate(dateStr: string | Date): string {
   try {
-    return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  } catch { return 'Data inválida'; }
+    return new Date(dateStr).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  } catch {
+    return 'Data inválida';
+  }
 }
 
-function RatingBar({ rating, count, total }: { rating: number; count: number; total: number }) {
+function RatingBar({
+  rating,
+  count,
+  total,
+}: {
+  rating: number;
+  count: number;
+  total: number;
+}) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
     <div className="flex items-center gap-3">
@@ -64,32 +87,87 @@ export default function AvaliacoesPage() {
   const [profile, setProfile] = useState<any>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [stats, setStats] = useState({ totalReviews: 0, averageRating: 0 });
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.push('/login'); return; }
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+
     const fetchData = async () => {
       try {
-        setIsLoading(true);
-        const profileData = await apiGetProfile();
-        if (profileData.role !== 'caregiver') { router.push('/'); return; }
-        setProfile(profileData);
+        const userBasic = await apiGetProfile();
 
-        const caregiverId = profileData._id || profileData.id;
-        if (!caregiverId) { setError('ID do cuidador não encontrado'); setIsLoading(false); return; }
-
-        const reviewsData = await apiGetCaregiverReviews(caregiverId);
-        const reviewsList: Review[] = Array.isArray(reviewsData) ? reviewsData : [];
-        setReviews(reviewsList);
-
-        if (reviewsList.length > 0) {
-          const avg = reviewsList.reduce((sum, r) => sum + r.rating, 0) / reviewsList.length;
-          setStats({ totalReviews: reviewsList.length, averageRating: Math.round(avg * 10) / 10 });
+        if (userBasic.role !== 'caregiver') {
+          router.push('/');
+          return;
         }
-      } catch { setError('Erro ao carregar avaliações. Tente novamente.'); }
-      finally { setIsLoading(false); }
+
+        // Tentar carregar perfil do cuidador
+        let mergedProfile = { ...userBasic, services: [], bio: '', availability: [] };
+        let caregiverProfileId: string | null = null;
+
+        try {
+          const caregiverProfile = await apiGetMyCaregiverProfile();
+          caregiverProfileId = caregiverProfile._id; // ID do documento caregiver
+          mergedProfile = {
+            ...userBasic,
+            ...caregiverProfile,
+            _id: userBasic._id, // ID do usuário
+            role: 'caregiver',
+          };
+        } catch (err: any) {
+          if (err?.message?.includes('401') || err?.message?.includes('403')) {
+            router.push('/login');
+            return;
+          }
+          setErrorMsg('Perfil de cuidador ainda não configurado.');
+        }
+
+        setProfile(mergedProfile);
+        setLocalUser(mergedProfile);
+
+        // Estatísticas do perfil
+        if (mergedProfile.rating !== undefined && mergedProfile.reviewsCount !== undefined) {
+          setStats({
+            averageRating: Number(mergedProfile.rating || 0),
+            totalReviews: Number(mergedProfile.reviewsCount || 0),
+          });
+        }
+
+        // Buscar lista detalhada de reviews – tenta primeiro com ID do caregiver, depois com ID do usuário
+        const userId = userBasic._id;
+        let reviewsList: Review[] = [];
+
+        if (caregiverProfileId) {
+          try {
+            const data = await apiGetCaregiverReviews(caregiverProfileId);
+            reviewsList = Array.isArray(data) ? data : [];
+          } catch {}
+        }
+
+        if (reviewsList.length === 0) {
+          try {
+            const data = await apiGetCaregiverReviews(userId);
+            reviewsList = Array.isArray(data) ? data : [];
+          } catch {}
+        }
+
+        setReviews(reviewsList);
+      } catch (error: any) {
+        if (error?.message?.includes('401') || error?.message?.includes('403')) {
+          router.push('/login');
+        } else {
+          console.error('Erro ao carregar dados:', error);
+          setErrorMsg('Não foi possível carregar seus dados. Verifique sua conexão.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
+
     fetchData();
   }, [router]);
 
@@ -104,12 +182,32 @@ export default function AvaliacoesPage() {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center text-white text-center px-4">
+          <div>
+            <AlertCircle className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
+            <p className="text-lg font-bold mb-2">Erro ao carregar perfil</p>
+            <p className="text-gray-400 text-sm">{errorMsg || 'Tente recarregar a página.'}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-[#FF6B35] text-white rounded-xl font-semibold hover:bg-[#E55A2B] transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   // Rating breakdown
-  const ratingCounts = [5, 4, 3, 2, 1].map(r => ({
+  const ratingCounts = [5, 4, 3, 2, 1].map((r) => ({
     rating: r,
-    count: reviews.filter(rv => rv.rating === r).length,
+    count: reviews.filter((rv) => rv.rating === r).length,
   }));
 
   return (
@@ -118,30 +216,40 @@ export default function AvaliacoesPage() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col md:flex-row gap-8">
-          <DashboardSidebar profile={profile} onProfileUpdate={(u) => { setProfile(u); setLocalUser(u); }} />
+          <DashboardSidebar
+            profile={profile}
+            onProfileUpdate={(u) => {
+              setProfile(u);
+              setLocalUser(u);
+            }}
+          />
 
           <div className="flex-1 min-w-0 space-y-6">
             {/* Header */}
             <div>
               <h1 className="text-2xl font-bold text-white mb-1">Avaliações Recebidas</h1>
-              <p className="text-gray-500 text-sm">O que os tutores estão dizendo sobre o seu atendimento.</p>
+              <p className="text-gray-500 text-sm">
+                O que os tutores estão dizendo sobre o seu atendimento.
+              </p>
             </div>
 
-            {error && (
-              <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/25 text-red-400 px-4 py-3 rounded-2xl text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
+            {errorMsg && (
+              <div className="flex items-center gap-3 bg-amber-500/8 border border-amber-500/25 text-amber-400 px-4 py-3 rounded-2xl text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {errorMsg}
               </div>
             )}
 
             {/* Stats */}
-            {reviews.length > 0 && (
+            {stats.totalReviews > 0 && (
               <div className="grid sm:grid-cols-3 gap-4">
                 {/* Big average */}
                 <div className="sm:col-span-1 relative bg-gradient-to-br from-[#1a1004] to-[#0a0a0a] border border-yellow-500/20 rounded-3xl p-6 overflow-hidden text-center">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 blur-2xl rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none" />
                   <div className="relative">
                     <Award className="w-7 h-7 text-yellow-400 mx-auto mb-3" />
-                    <div className="text-5xl font-bold text-white mb-1">{stats.averageRating}</div>
+                    <div className="text-5xl font-bold text-white mb-1">
+                      {stats.averageRating.toFixed(1)}
+                    </div>
                     <div className="flex justify-center mb-2">
                       <StarRating rating={Math.round(stats.averageRating)} size={18} />
                     </div>
@@ -157,22 +265,31 @@ export default function AvaliacoesPage() {
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-white">{stats.totalReviews}</div>
-                      <p className="text-xs text-gray-500">avaliação{stats.totalReviews !== 1 ? 'ões' : ''} no total</p>
+                      <p className="text-xs text-gray-500">
+                        avaliação{stats.totalReviews !== 1 ? 'ões' : ''} no total
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-2">
                     {ratingCounts.map(({ rating, count }) => (
-                      <RatingBar key={rating} rating={rating} count={count} total={stats.totalReviews} />
+                      <RatingBar
+                        key={rating}
+                        rating={rating}
+                        count={count}
+                        total={stats.totalReviews}
+                      />
                     ))}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Reviews list */}
+            {/* Lista de avaliações detalhadas */}
             {reviews.length > 0 ? (
               <div className="space-y-4">
-                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Todas as avaliações</h2>
+                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                  Todas as avaliações
+                </h2>
                 {reviews.map((review, index) => (
                   <div
                     key={index}
@@ -185,7 +302,9 @@ export default function AvaliacoesPage() {
                           {review.tutorName ? review.tutorName.charAt(0) : 'T'}
                         </div>
                         <div>
-                          <h4 className="text-white font-bold text-sm">{review.tutorName || 'Tutor'}</h4>
+                          <h4 className="text-white font-bold text-sm">
+                            {review.tutorName || 'Tutor'}
+                          </h4>
                           <span className="text-gray-500 text-xs">Tutor verificado</span>
                         </div>
                       </div>
@@ -199,7 +318,9 @@ export default function AvaliacoesPage() {
                     {review.comment ? (
                       <div className="flex gap-3">
                         <MessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
-                        <p className="text-gray-300 text-sm leading-relaxed">"{review.comment}"</p>
+                        <p className="text-gray-300 text-sm leading-relaxed">
+                          &ldquo;{review.comment}&rdquo;
+                        </p>
                       </div>
                     ) : (
                       <p className="text-gray-600 text-sm italic pl-7">Sem comentário escrito.</p>
@@ -215,7 +336,25 @@ export default function AvaliacoesPage() {
                   </div>
                 ))}
               </div>
-            ) : !error ? (
+            ) : stats.totalReviews > 0 ? (
+              <div className="bg-white/4 border border-white/8 rounded-3xl p-8 text-center">
+                <MessageSquare className="w-8 h-8 text-gray-500 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm mb-4">
+                  As avaliações detalhadas não puderam ser carregadas.
+                </p>
+                <button
+                  onClick={async () => {
+                    try {
+                      const retry = await apiGetCaregiverReviews(profile._id);
+                      setReviews(Array.isArray(retry) ? retry : []);
+                    } catch {}
+                  }}
+                  className="px-4 py-2 bg-[#FF6B35] text-white rounded-xl text-sm font-semibold hover:bg-[#E55A2B] transition-colors"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            ) : !errorMsg ? (
               <div className="bg-white/4 border border-white/8 rounded-3xl p-14 text-center flex flex-col items-center">
                 <div className="w-20 h-20 rounded-3xl bg-yellow-500/8 border border-yellow-500/15 flex items-center justify-center mb-5">
                   <Star className="w-9 h-9 text-yellow-500/40" />

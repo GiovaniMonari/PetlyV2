@@ -18,113 +18,177 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import {
-  apiGetCaregiverServiceTypes,
   apiGetProfile,
-  apiUpdateProfile,
+  apiGetMyCaregiverProfile,
+  apiUpdateMyCaregiverProfile,
   CaregiverServiceTypeOption,
+  ServiceType,
   isAuthenticated,
   setUser as setLocalUser,
 } from '@/utils/api';
 
 const SERVICE_ICONS: Record<string, any> = {
-  boarding: Home,
-  visit: Footprints,
-  walk: Footprints,
-  grooming: Scissors,
-  training: Dumbbell,
-  daycare: School,
+  [ServiceType.BOARDING]: Home,
+  [ServiceType.WALK]: Footprints,
+  [ServiceType.DAYCARE]: School,
+  [ServiceType.GROOMING]: Scissors,
+  [ServiceType.TRAINING]: Dumbbell,
 };
+
+const DEFAULT_SERVICE_TYPES: CaregiverServiceTypeOption[] = [
+  { type: ServiceType.WALK, name: 'Passeio', description: 'Passeios diários', durations: ['30min', '60min'] },
+  { type: ServiceType.BOARDING, name: 'Hospedagem', description: 'Hospedagem 24h', durations: ['24h'] },
+  { type: ServiceType.DAYCARE, name: 'Creche', description: 'Creche durante o dia', durations: ['12h'] },
+  { type: ServiceType.GROOMING, name: 'Banho e Tosa', description: 'Serviços de higiene', durations: ['60min', '90min'] },
+  { type: ServiceType.TRAINING, name: 'Adestramento', description: 'Treinamento comportamental', durations: ['60min'] },
+];
 
 export default function ServicosPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
-  const [serviceOptions, setServiceOptions] = useState<CaregiverServiceTypeOption[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<CaregiverServiceTypeOption[]>(DEFAULT_SERVICE_TYPES);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [editForm, setEditForm] = useState<any>({ bio: '', services: [] });
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.push('/login'); return; }
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+
     const fetchData = async () => {
       try {
-        const [profileData, caregiverServiceTypes] = await Promise.all([
-          apiGetProfile(),
-          apiGetCaregiverServiceTypes(),
-        ]);
-        if (profileData.role !== 'caregiver') { router.push('/'); return; }
+        const userBasic = await apiGetProfile();
 
-        setServiceOptions(caregiverServiceTypes || []);
+        if (userBasic.role !== 'caregiver') {
+          router.push('/');
+          return;
+        }
 
-        const allowedServiceNames = new Set((caregiverServiceTypes || []).map(s => s.name));
-        const filteredServices = (profileData.services || [])
-          .filter((s: any) => allowedServiceNames.has(s?.name))
+        // Tentar buscar tipos de serviço do backend – se falhar, usa DEFAULT_SERVICE_TYPES
+        try {
+          const { apiGetCaregiverServiceTypes } = await import('@/utils/api');
+          const backendTypes = await apiGetCaregiverServiceTypes();
+          if (backendTypes && backendTypes.length > 0) {
+            setServiceOptions(backendTypes);
+          }
+        } catch (serviceErr) {
+          console.warn('Usando tipos de serviço padrão (fallback).');
+        }
+
+        // Mesclar perfil do cuidador com fallback
+        let mergedProfile = { ...userBasic, services: [], bio: '', availability: [] };
+        try {
+          const caregiverProfile = await apiGetMyCaregiverProfile();
+          mergedProfile = {
+            ...userBasic,
+            ...caregiverProfile,
+            _id: userBasic._id,
+            role: 'caregiver',
+          };
+        } catch (caregiverErr: any) {
+          if (caregiverErr?.message?.includes('401')) {
+            router.push('/login');
+            return;
+          }
+          setErrorMsg('Perfil de cuidador ainda não configurado. Preencha os dados abaixo.');
+        }
+
+        setProfile(mergedProfile);
+        setLocalUser(mergedProfile);
+
+        // Inicializar formulário
+        const currentServiceOptions = serviceOptions.length ? serviceOptions : DEFAULT_SERVICE_TYPES;
+        const allowedNames = new Set(currentServiceOptions.map(s => s.name));
+        const filteredServices = (mergedProfile.services || [])
+          .filter((s: any) => allowedNames.has(s?.name))
           .map((s: any) => {
-            const opt = caregiverServiceTypes?.find((o: any) => o.name === s.name || o.type === s.type);
-            return { ...s, type: s.type || opt?.type, duration: s.duration || (opt?.durations?.[0] || '60 min') };
+            const opt = currentServiceOptions.find(o => o.name === s.name || o.type === s.type);
+            return {
+              ...s,
+              type: s.type || opt?.type,
+              duration: s.duration || (opt?.durations?.[0] || '60 min'),
+            };
           });
 
-        setProfile(profileData);
-        setEditForm({ bio: profileData.bio || '', services: filteredServices });
-      } catch (error) {
-        console.error('Error fetching data:', error);
+        setEditForm({ bio: mergedProfile.bio || '', services: filteredServices });
+      } catch (error: any) {
+        if (error?.message?.includes('401') || error?.message?.includes('403')) {
+          router.push('/login');
+        } else {
+          console.error('Erro ao carregar dados:', error);
+          setErrorMsg('Não foi possível carregar seus dados. Verifique sua conexão.');
+        }
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchData();
   }, [router]);
 
+  // Handlers (mantidos como antes)
   const handleServiceChange = (serviceOption: CaregiverServiceTypeOption, isChecked: boolean) => {
     setEditForm((prev: any) => {
       if (isChecked) {
         const defaultDuration = serviceOption.durations?.length ? serviceOption.durations[0] : '60 min';
-        return { ...prev, services: [...prev.services, { type: serviceOption.type, name: serviceOption.name, price: 0, duration: defaultDuration }] };
+        return {
+          ...prev,
+          services: [...prev.services, { type: serviceOption.type, name: serviceOption.name, price: 0, duration: defaultDuration }],
+        };
       }
-      return { ...prev, services: prev.services.filter((s: any) => s.type !== serviceOption.type && s.name !== serviceOption.name) };
+      return {
+        ...prev,
+        services: prev.services.filter((s: any) => s.type !== serviceOption.type && s.name !== serviceOption.name),
+      };
     });
   };
 
   const handleServicePriceChange = (serviceType: string, price: number) => {
     setEditForm((prev: any) => ({
       ...prev,
-      services: prev.services.map((s: any) => (s.type === serviceType || s.name === serviceType) ? { ...s, price } : s),
+      services: prev.services.map((s: any) => (s.type === serviceType || s.name === serviceType ? { ...s, price } : s)),
     }));
   };
 
   const handleServiceDurationChange = (serviceType: string, duration: string) => {
     setEditForm((prev: any) => ({
       ...prev,
-      services: prev.services.map((s: any) => (s.type === serviceType || s.name === serviceType) ? { ...s, duration } : s),
+      services: prev.services.map((s: any) => (s.type === serviceType || s.name === serviceType ? { ...s, duration } : s)),
     }));
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     setSuccessMsg('');
+    setErrorMsg('');
     try {
-      const allowedServiceNames = new Set(serviceOptions.map(s => s.name));
-      const allowedServiceTypes = new Set(serviceOptions.map(s => s.type));
-      const validServices = (editForm.services || [])
-        .filter((s: any) => allowedServiceTypes.has(s?.type) || allowedServiceNames.has(s?.name))
-        .map((s: any) => {
-          const newService = { ...s };
-          if (!newService.type) {
-            const opt = serviceOptions.find(o => o.name === s.name);
-            if (opt) newService.type = opt.type;
-          }
-          return newService;
-        });
+      const validServices = editForm.services.map((s: any) => ({
+        type: s.type,
+        name: s.name,
+        price: s.price,
+        duration: s.duration,
+      }));
 
-      const updated = await apiUpdateProfile(profile._id, { bio: editForm.bio, services: validServices });
-      setProfile(updated);
-      setLocalUser(updated);
-      setEditForm((prev: any) => ({ ...prev, services: updated.services || [] }));
+      const payload = { bio: editForm.bio, services: validServices };
+      const updatedCaregiver = await apiUpdateMyCaregiverProfile(payload);
+
+      const userBasic = await apiGetProfile();
+      const mergedUpdated = { ...userBasic, ...updatedCaregiver, _id: userBasic._id, role: 'caregiver' };
+      setProfile(mergedUpdated);
+      setLocalUser(mergedUpdated);
+      setEditForm((prev: any) => ({ ...prev, services: updatedCaregiver.services || validServices }));
       setSuccessMsg('Configurações salvas com sucesso!');
       setTimeout(() => setSuccessMsg(''), 3000);
-    } catch { alert('Erro ao salvar as configurações.'); }
-    finally { setIsSaving(false); }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Erro ao salvar.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -138,41 +202,56 @@ export default function ServicosPage() {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center text-white text-center px-4">
+          <div>
+            <AlertCircle className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
+            <p className="text-lg font-bold mb-2">Erro ao carregar perfil</p>
+            <p className="text-gray-400 text-sm">{errorMsg || 'Tente recarregar a página.'}</p>
+            <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-[#FF6B35] text-white rounded-xl font-semibold hover:bg-[#E55A2B] transition-colors">
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
       <Navbar />
-
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col md:flex-row gap-8">
           <DashboardSidebar profile={profile} onProfileUpdate={(u) => { setProfile(u); setLocalUser(u); }} />
-
           <div className="flex-1 min-w-0 space-y-6">
-            {/* Page header */}
+            {/* Cabeçalho */}
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-white mb-1">Serviços & Preços</h1>
-                <p className="text-gray-500 text-sm">Configure o que você oferece e quanto cobra por cada serviço.</p>
+                <p className="text-gray-500 text-sm">Configure o que você oferece e quanto cobra.</p>
               </div>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex-shrink-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#CF4A1D] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#FF6B35]/20 disabled:opacity-50"
-              >
+              <button onClick={handleSave} disabled={isSaving} className="flex-shrink-0 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] hover:from-[#E55A2B] hover:to-[#CF4A1D] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#FF6B35]/20 disabled:opacity-50">
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Salvar
               </button>
             </div>
 
-            {/* Success message */}
+            {errorMsg && (
+              <div className="flex items-center gap-3 bg-amber-500/8 border border-amber-500/25 text-amber-400 px-4 py-3 rounded-2xl text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {errorMsg}
+              </div>
+            )}
+
             {successMsg && (
               <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 px-4 py-3 rounded-2xl text-sm font-semibold">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {successMsg}
               </div>
             )}
 
-            {/* No service warning */}
             {editForm.services?.length === 0 && (
               <div className="flex items-center gap-3 bg-amber-500/8 border border-amber-500/25 text-amber-400 px-4 py-3 rounded-2xl text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -180,7 +259,7 @@ export default function ServicosPage() {
               </div>
             )}
 
-            {/* Bio section */}
+            {/* Bio */}
             <div className="bg-white/4 border border-white/8 rounded-3xl p-6 md:p-8">
               <div className="flex items-center gap-3 mb-5">
                 <div className="w-9 h-9 rounded-2xl bg-[#FF6B35]/10 flex items-center justify-center">
@@ -199,7 +278,7 @@ export default function ServicosPage() {
               />
             </div>
 
-            {/* Services section */}
+            {/* Serviços */}
             <div className="bg-white/4 border border-white/8 rounded-3xl p-6 md:p-8">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-9 h-9 rounded-2xl bg-[#FF6B35]/10 flex items-center justify-center">
@@ -218,64 +297,32 @@ export default function ServicosPage() {
                   const Icon = SERVICE_ICONS[serviceOption.type] || Plus;
 
                   return (
-                    <div
-                      key={serviceOption.type}
-                      className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
-                        isSelected
-                          ? 'border-[#FF6B35]/30 bg-[#FF6B35]/5'
-                          : 'border-white/8 bg-black/20 hover:border-white/15'
-                      }`}
-                    >
+                    <div key={serviceOption.type} className={`rounded-2xl border transition-all duration-200 overflow-hidden ${isSelected ? 'border-[#FF6B35]/30 bg-[#FF6B35]/5' : 'border-white/8 bg-black/20 hover:border-white/15'}`}>
                       <label className="flex items-center gap-4 p-4 cursor-pointer">
-                        {/* Custom checkbox */}
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                          isSelected ? 'bg-[#FF6B35] border-[#FF6B35]' : 'border-white/20 bg-black/30'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSelected ? 'bg-[#FF6B35] border-[#FF6B35]' : 'border-white/20 bg-black/30'}`}>
                           {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => handleServiceChange(serviceOption, e.target.checked)}
-                            className="sr-only"
-                          />
+                          <input type="checkbox" checked={isSelected} onChange={(e) => handleServiceChange(serviceOption, e.target.checked)} className="sr-only" />
                         </div>
-
-                        {/* Icon */}
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-[#FF6B35]/15' : 'bg-white/5'}`}>
                           <Icon className={`w-4 h-4 ${isSelected ? 'text-[#FF6B35]' : 'text-gray-500'}`} />
                         </div>
-
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-white">{serviceOption.name}</p>
                           <p className="text-xs text-gray-500 mt-0.5">{serviceOption.description}</p>
                         </div>
                       </label>
 
-                      {/* Price + duration inputs (only when selected) */}
                       {isSelected && (
                         <div className="px-4 pb-4 flex flex-wrap items-center gap-4 border-t border-white/5 pt-3 mt-0">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-gray-400">R$</span>
-                            <input
-                              type="number"
-                              value={serviceData?.price || 0}
-                              onChange={(e) => handleServicePriceChange(serviceOption.type, Number(e.target.value))}
-                              className="w-24 bg-black/40 border border-white/10 hover:border-white/20 focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/30 text-white rounded-xl px-3 py-2 text-sm outline-none transition-all"
-                            />
+                            <input type="number" value={serviceData?.price || 0} onChange={(e) => handleServicePriceChange(serviceOption.type, Number(e.target.value))} className="w-24 bg-black/40 border border-white/10 hover:border-white/20 focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/30 text-white rounded-xl px-3 py-2 text-sm outline-none transition-all" />
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-gray-400">por</span>
-                            <select
-                              value={serviceData?.duration || ''}
-                              onChange={(e) => handleServiceDurationChange(serviceOption.type, e.target.value)}
-                              className="bg-black/40 border border-white/10 hover:border-white/20 focus:border-[#FF6B35]/50 text-white rounded-xl px-3 py-2 text-sm outline-none transition-all cursor-pointer"
-                            >
-                              {serviceOption.durations?.map((dur) => (
-                                <option key={dur} value={dur}>{dur}</option>
-                              ))}
-                              {(!serviceOption.durations || serviceOption.durations.length === 0) && (
-                                <option value="60 min">60 min</option>
-                              )}
+                            <select value={serviceData?.duration || ''} onChange={(e) => handleServiceDurationChange(serviceOption.type, e.target.value)} className="bg-black/40 border border-white/10 hover:border-white/20 focus:border-[#FF6B35]/50 text-white rounded-xl px-3 py-2 text-sm outline-none transition-all cursor-pointer">
+                              {serviceOption.durations?.map((dur) => (<option key={dur} value={dur}>{dur}</option>))}
+                              {(!serviceOption.durations || serviceOption.durations.length === 0) && (<option value="60 min">60 min</option>)}
                             </select>
                           </div>
                         </div>
@@ -288,7 +335,6 @@ export default function ServicosPage() {
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   );

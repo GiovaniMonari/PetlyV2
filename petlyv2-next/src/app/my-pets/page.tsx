@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  Dog, 
-  Cat, 
-  Bird, 
-  PawPrint, 
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Dog,
+  Cat,
+  Bird,
+  PawPrint,
   Camera,
   X,
   Loader2,
@@ -21,21 +21,27 @@ import {
   Shield,
   AlertCircle,
   FileText,
-  Lock
+  Lock,
+  CheckCircle2,
+  ImageIcon,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { 
-  getUser, 
-  apiGetMyPets, 
-  apiCreatePet, 
-  apiUpdatePet, 
+import {
+  getUser,
+  apiGetMyPets,
+  apiCreatePet,
+  apiUpdatePet,
   apiDeletePet,
-  apiUploadPetAvatar 
+  apiUploadPetAvatar,
+  pollPetAvatarReady,
 } from '@/utils/api';
 import { toast } from 'react-hot-toast';
 
-// Enums baseados no schema
+// ============================================================
+// Enums / Interfaces
+// ============================================================
+
 enum PetType {
   DOG = 'dog',
   CAT = 'cat',
@@ -49,7 +55,6 @@ enum PetSize {
   LARGE = 'large',
 }
 
-// Interface baseada no Pet Schema
 interface Pet {
   _id: string;
   id: string;
@@ -65,7 +70,6 @@ interface Pet {
   updatedAt: string;
 }
 
-// DTO baseado no CreatePetDto
 interface CreatePetFormData {
   name: string;
   avatar?: string;
@@ -76,6 +80,19 @@ interface CreatePetFormData {
   notes?: string;
 }
 
+// Estado local de upload para cada pet
+type AvatarUploadStatus = 'idle' | 'uploading' | 'processing' | 'done' | 'error';
+
+interface AvatarState {
+  status: AvatarUploadStatus;
+  /** URL local (blob) ou URL remota definitiva */
+  previewUrl: string | null;
+}
+
+// ============================================================
+// Constantes
+// ============================================================
+
 const PET_TYPES = [
   { value: PetType.DOG, label: 'Cachorro', icon: Dog, color: '#FF6B35' },
   { value: PetType.CAT, label: 'Gato', icon: Cat, color: '#06A77D' },
@@ -84,23 +101,23 @@ const PET_TYPES = [
 ] as const;
 
 const PET_SIZES = [
-  { 
-    value: PetSize.SMALL, 
-    label: 'Pequeno', 
+  {
+    value: PetSize.SMALL,
+    label: 'Pequeno',
     description: 'Até 10kg',
-    examples: 'Ex: Shih Tzu, Pinscher, Yorkshire'
+    examples: 'Ex: Shih Tzu, Pinscher, Yorkshire',
   },
-  { 
-    value: PetSize.MEDIUM, 
-    label: 'Médio', 
+  {
+    value: PetSize.MEDIUM,
+    label: 'Médio',
     description: '10kg - 25kg',
-    examples: 'Ex: Beagle, Bulldog, Cocker Spaniel'
+    examples: 'Ex: Beagle, Bulldog, Cocker Spaniel',
   },
-  { 
-    value: PetSize.LARGE, 
-    label: 'Grande', 
+  {
+    value: PetSize.LARGE,
+    label: 'Grande',
     description: 'Acima de 25kg',
-    examples: 'Ex: Golden Retriever, Pastor Alemão, Labrador'
+    examples: 'Ex: Golden Retriever, Pastor Alemão, Labrador',
   },
 ] as const;
 
@@ -114,10 +131,157 @@ const emptyFormData: CreatePetFormData = {
   notes: '',
 };
 
+// ============================================================
+// Helpers
+// ============================================================
+
+function getPetIcon(type: PetType) {
+  return PET_TYPES.find((t) => t.value === type)?.icon || PawPrint;
+}
+
+function getPetColor(type: PetType) {
+  return PET_TYPES.find((t) => t.value === type)?.color || '#FF6B35';
+}
+
+function getSizeLabel(size: PetSize) {
+  return PET_SIZES.find((s) => s.value === size)?.label || size;
+}
+
+function getSizeDescription(size: PetSize) {
+  return PET_SIZES.find((s) => s.value === size)?.description || '';
+}
+
+// ============================================================
+// Hook: upload assíncrono de avatar de pet
+// ============================================================
+
+function usePetAvatarUpload() {
+  // Mapa de petId → AvatarState
+  const [avatarStates, setAvatarStates] = useState<Record<string, AvatarState>>({});
+  // Mantém referência dos blob URLs para revogar quando não forem mais necessários
+  const blobUrlsRef = useRef<Record<string, string>>({});
+
+  const revokeBlobUrl = useCallback((petId: string) => {
+    if (blobUrlsRef.current[petId]) {
+      URL.revokeObjectURL(blobUrlsRef.current[petId]);
+      delete blobUrlsRef.current[petId];
+    }
+  }, []);
+
+  // Limpa todos os blob URLs ao desmontar o componente
+  useEffect(() => {
+    const blobs = blobUrlsRef.current;
+    return () => {
+      Object.values(blobs).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  const uploadAvatar = useCallback(
+    async (petId: string, file: File, currentAvatar?: string) => {
+      // 1. Preview local imediato (UI otimista)
+      revokeBlobUrl(petId);
+      const blobUrl = URL.createObjectURL(file);
+      blobUrlsRef.current[petId] = blobUrl;
+
+      setAvatarStates((prev) => ({
+        ...prev,
+        [petId]: { status: 'uploading', previewUrl: blobUrl },
+      }));
+
+      try {
+        // 2. Enfileira o upload — retorna ~5 ms com jobId (202 Accepted)
+        await apiUploadPetAvatar(petId, file);
+
+        setAvatarStates((prev) => ({
+          ...prev,
+          [petId]: { status: 'done', previewUrl: blobUrl },
+        }));
+        toast.success('Foto atualizada!');
+
+        void pollPetAvatarReady(petId, currentAvatar, {
+          intervalMs: 3_000,
+          timeoutMs: 60_000,
+        }).then((newUrl) => {
+          if (!newUrl) return;
+
+          revokeBlobUrl(petId);
+          setAvatarStates((prev) => ({
+            ...prev,
+            [petId]: { status: 'done', previewUrl: newUrl },
+          }));
+        });
+      } catch (err: any) {
+        revokeBlobUrl(petId);
+        setAvatarStates((prev) => ({
+          ...prev,
+          [petId]: { status: 'error', previewUrl: null },
+        }));
+        toast.error(err?.message || 'Erro ao atualizar foto. Tente novamente.');
+      }
+    },
+    [revokeBlobUrl],
+  );
+
+  /** Retorna a URL de exibição correta: preview local → URL definitiva → avatar original */
+  const getDisplayAvatar = useCallback(
+    (petId: string, originalAvatar?: string): string | null => {
+      const state = avatarStates[petId];
+      return state?.previewUrl ?? originalAvatar ?? null;
+    },
+    [avatarStates],
+  );
+
+  const getStatus = useCallback(
+    (petId: string): AvatarUploadStatus => avatarStates[petId]?.status ?? 'idle',
+    [avatarStates],
+  );
+
+  return { uploadAvatar, getDisplayAvatar, getStatus };
+}
+
+// ============================================================
+// Subcomponente: overlay de status do avatar
+// ============================================================
+
+function AvatarStatusOverlay({ status }: { status: AvatarUploadStatus }) {
+  if (status === 'idle' || status === 'done' || status === 'error') return null;
+
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-t-none">
+      {status === 'uploading' && (
+        <>
+          <Loader2 className="w-7 h-7 text-white animate-spin mb-1.5" />
+          <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
+            Enviando...
+          </span>
+        </>
+      )}
+      {status === 'processing' && (
+        <>
+          <div className="relative mb-1.5">
+            <ImageIcon className="w-7 h-7 text-white/60" />
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF6B35] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#FF6B35]"></span>
+            </span>
+          </div>
+          <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wider">
+            Processando...
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Página principal
+// ============================================================
+
 export default function MyPetsPage() {
   const router = useRouter();
   const user = getUser();
-  
+
   const [pets, setPets] = useState<Pet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -127,11 +291,14 @@ export default function MyPetsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Verificar se o tipo selecionado é cachorro
+  const { uploadAvatar, getDisplayAvatar, getStatus } = usePetAvatarUpload();
+
   const isDog = formData.type === PetType.DOG;
-  
-  // Verificar se deve mostrar o campo de porte (apenas para cachorros)
   const shouldShowSize = isDog;
+
+  // ──────────────────────────────────────────
+  // Efeitos
+  // ──────────────────────────────────────────
 
   useEffect(() => {
     if (!user) {
@@ -139,34 +306,38 @@ export default function MyPetsPage() {
       router.push('/login');
       return;
     }
-
     if (user.role !== 'tutor') {
       toast.error('Apenas tutores podem gerenciar pets');
       router.push('/');
       return;
     }
-
     fetchPets();
   }, [user, router]);
 
-  // Efeito para resetar o porte quando não for cachorro
   useEffect(() => {
     if (!isDog) {
-      setFormData(prev => ({ ...prev, size: PetSize.SMALL }));
+      setFormData((prev) => ({ ...prev, size: PetSize.SMALL }));
     }
   }, [formData.type, isDog]);
+
+  // ──────────────────────────────────────────
+  // Carregamento de dados
+  // ──────────────────────────────────────────
 
   const fetchPets = async () => {
     try {
       const data = await apiGetMyPets();
       setPets(data || []);
     } catch (error: any) {
-      console.error('Erro ao carregar pets:', error);
       toast.error(error?.message || 'Erro ao carregar seus pets');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // ──────────────────────────────────────────
+  // Handlers do modal
+  // ──────────────────────────────────────────
 
   const handleOpenCreate = () => {
     setEditingPet(null);
@@ -197,19 +368,16 @@ export default function MyPetsPage() {
     setFormErrors({});
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    
-    // Limpar erro do campo quando começar a digitar
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
-      setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
       });
     }
   };
@@ -217,21 +385,19 @@ export default function MyPetsPage() {
   const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const numValue = value === '' ? undefined : Number(value);
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: numValue,
-    }));
-    
-    // Limpar erro do campo
+    setFormData((prev) => ({ ...prev, [name]: numValue }));
     if (formErrors[name]) {
-      setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
       });
     }
   };
+
+  // ──────────────────────────────────────────
+  // Validação
+  // ──────────────────────────────────────────
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -260,7 +426,6 @@ export default function MyPetsPage() {
       errors.age = 'Idade deve ser um número inteiro';
     }
 
-    // Validar porte apenas se for cachorro
     if (isDog && !formData.size) {
       errors.size = 'Porte é obrigatório para cachorros';
     }
@@ -270,20 +435,21 @@ export default function MyPetsPage() {
     }
 
     setFormErrors(errors);
-    
-    // Mostrar primeiro erro como toast
+
     if (Object.keys(errors).length > 0) {
-      const firstError = Object.values(errors)[0];
-      toast.error(firstError);
+      toast.error(Object.values(errors)[0]);
       return false;
     }
 
     return true;
   };
 
+  // ──────────────────────────────────────────
+  // Submit
+  // ──────────────────────────────────────────
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
 
     setIsSubmitting(true);
@@ -305,102 +471,87 @@ export default function MyPetsPage() {
         await apiCreatePet(payload);
         toast.success(`${formData.name} foi cadastrado com sucesso! 🎉`);
       }
-      
+
       await fetchPets();
       handleCloseModal();
     } catch (error: any) {
-      console.error('Erro ao salvar pet:', error);
-      const message = error?.message || 'Erro ao salvar pet. Tente novamente.';
-      toast.error(message);
+      toast.error(error?.message || 'Erro ao salvar pet. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ──────────────────────────────────────────
+  // Delete
+  // ──────────────────────────────────────────
+
   const handleDeleteClick = (pet: Pet) => {
-    const petId = pet._id || pet.id;
-    setDeleteTarget({ id: petId, name: pet.name });
+    setDeleteTarget({ id: pet._id || pet.id, name: pet.name });
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-
     try {
       await apiDeletePet(deleteTarget.id);
       toast.success(`${deleteTarget.name} foi removido com sucesso`);
-      setPets(prev => prev.filter(p => (p._id || p.id) !== deleteTarget.id));
+      setPets((prev) => prev.filter((p) => (p._id || p.id) !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (error: any) {
-      console.error('Erro ao deletar pet:', error);
       toast.error(error?.message || 'Erro ao remover pet. Tente novamente.');
     }
   };
 
-  const handleAvatarUpload = async (petId: string, file: File) => {
+  // ──────────────────────────────────────────
+  // Upload de avatar — dispara o hook
+  // ──────────────────────────────────────────
+
+  const handleAvatarUpload = (petId: string, file: File, currentAvatar?: string) => {
     if (!file.type.startsWith('image/')) {
       toast.error('Por favor, selecione uma imagem válida');
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       toast.error('A imagem deve ter no máximo 5MB');
       return;
     }
-
-    try {
-      const updatedPet = await apiUploadPetAvatar(petId, file);
-      setPets(prev => 
-        prev.map(p => 
-          (p._id || p.id) === petId 
-            ? { ...p, avatar: updatedPet.avatar }
-            : p
-        )
-      );
-      toast.success('Foto atualizada com sucesso!');
-    } catch (error: any) {
-      console.error('Erro ao fazer upload:', error);
-      toast.error(error?.message || 'Erro ao atualizar foto. Tente novamente.');
-    }
+    // Dispara o upload assíncrono sem await — a UI reage via estado
+    uploadAvatar(petId, file, currentAvatar);
   };
 
-  const getPetIcon = (type: PetType) => {
-    const petType = PET_TYPES.find(t => t.value === type);
-    return petType?.icon || PawPrint;
+  const openFilePicker = (petId: string, currentAvatar?: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleAvatarUpload(petId, file, currentAvatar);
+    };
+    input.click();
   };
 
-  const getPetColor = (type: PetType) => {
-    const petType = PET_TYPES.find(t => t.value === type);
-    return petType?.color || '#FF6B35';
-  };
+  // ──────────────────────────────────────────
+  // Guards
+  // ──────────────────────────────────────────
 
-  const getSizeLabel = (size: PetSize) => {
-    const petSize = PET_SIZES.find(s => s.value === size);
-    return petSize?.label || size;
-  };
+  if (!user || user.role !== 'tutor') return null;
 
-  const getSizeDescription = (size: PetSize) => {
-    const petSize = PET_SIZES.find(s => s.value === size);
-    return petSize?.description || '';
-  };
-
-  if (!user || user.role !== 'tutor') {
-    return null;
-  }
+  // ──────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────
 
   return (
     <>
       <Navbar />
-      
+
       <main className="min-h-screen bg-transparent">
+        {/* Hero */}
         <div className="border-b border-white/10 relative overflow-hidden">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#FF6B35]/10 blur-[100px] rounded-full pointer-events-none"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#FF6B35]/10 blur-[100px] rounded-full pointer-events-none" />
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
-                  Meus Pets
-                </h1>
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">Meus Pets</h1>
                 <p className="text-lg text-gray-400">
                   {isLoading
                     ? 'Carregando seus pets...'
@@ -420,21 +571,22 @@ export default function MyPetsPage() {
             <div className="mt-8 bg-[#FF6B35]/5 border border-[#FF6B35]/20 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center gap-4">
               <Shield className="w-5 h-5 text-[#FF6B35] flex-shrink-0" />
               <div>
-                <p className="text-sm text-gray-300 font-medium mb-1">
-                  Dica importante
-                </p>
+                <p className="text-sm text-gray-300 font-medium mb-1">Dica importante</p>
                 <p className="text-sm text-gray-400">
-                  Preencha todos os campos obrigatórios (nome, tipo, idade e raça) para que os cuidadores possam oferecer o melhor serviço para seu pet. O porte é obrigatório apenas para cachorros.
+                  Preencha todos os campos obrigatórios (nome, tipo, idade e raça) para que os
+                  cuidadores possam oferecer o melhor serviço para seu pet. O porte é obrigatório
+                  apenas para cachorros.
                 </p>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Grid de pets */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           {isLoading ? (
             <div className="py-20 flex justify-center">
-              <div className="w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : pets.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -442,23 +594,30 @@ export default function MyPetsPage() {
                 const PetIcon = getPetIcon(pet.type);
                 const petColor = getPetColor(pet.type);
                 const petId = pet._id || pet.id;
-                
+                const uploadStatus = getStatus(petId);
+                const displayAvatar = getDisplayAvatar(petId, pet.avatar);
+                const isUploading =
+                  uploadStatus === 'uploading' || uploadStatus === 'processing';
+
                 return (
                   <div
                     key={petId}
                     className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden transition-all hover:shadow-xl hover:shadow-[#FF6B35]/10 hover:border-[#FF6B35]/50 group"
                   >
+                    {/* Imagem do pet */}
                     <div className="relative h-48 overflow-hidden bg-black/40 flex items-center justify-center">
-                      {pet.avatar ? (
+                      {displayAvatar ? (
                         <>
                           <Image
-                            src={pet.avatar}
+                            src={displayAvatar}
                             alt={pet.name}
                             fill
                             className="object-cover transition-transform duration-300 group-hover:scale-110"
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            // Para blob URLs, desabilitamos a otimização do Next.js
+                            unoptimized={displayAvatar.startsWith('blob:')}
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                         </>
                       ) : (
                         <div className="flex flex-col items-center gap-2">
@@ -466,6 +625,10 @@ export default function MyPetsPage() {
                         </div>
                       )}
 
+                      {/* Overlay de progresso do upload */}
+                      <AvatarStatusOverlay status={uploadStatus} />
+
+                      {/* Badge de tipo */}
                       <div
                         className="absolute top-3 right-3 px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 backdrop-blur-md"
                         style={{
@@ -478,24 +641,29 @@ export default function MyPetsPage() {
                         {PET_TYPES.find((t) => t.value === pet.type)?.label}
                       </div>
 
-                      <button
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*';
-                          input.onchange = (e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) handleAvatarUpload(petId, file);
-                          };
-                          input.click();
-                        }}
-                        className="absolute bottom-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-full border border-white/20 opacity-0 group-hover:opacity-100 transition-all hover:bg-black/80 hover:scale-110"
-                        title="Alterar foto"
-                      >
-                        <Camera className="w-4 h-4 text-white" />
-                      </button>
+                      {/* Botão de câmera — oculto durante upload */}
+                      {!isUploading && (
+                        <button
+                          onClick={() => openFilePicker(petId, pet.avatar)}
+                          className="absolute bottom-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-full border border-white/20 opacity-0 group-hover:opacity-100 transition-all hover:bg-black/80 hover:scale-110"
+                          title="Alterar foto"
+                        >
+                          <Camera className="w-4 h-4 text-white" />
+                        </button>
+                      )}
+
+                      {/* Badge de sucesso ao concluir */}
+                      {uploadStatus === 'done' && (
+                        <div className="absolute bottom-3 left-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-[#06A77D]/20 border border-[#06A77D]/40 backdrop-blur-md animate-in fade-in duration-300">
+                          <CheckCircle2 className="w-3 h-3 text-[#06A77D]" />
+                          <span className="text-[10px] font-semibold text-[#06A77D]">
+                            Foto atualizada
+                          </span>
+                        </div>
+                      )}
                     </div>
 
+                    {/* Informações */}
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -522,19 +690,19 @@ export default function MyPetsPage() {
                           </div>
                         </div>
                         {pet.type === PetType.DOG && (
-                          <div className="bg-white/5 rounded-lg p-2.5">
-                            <p className="text-xs text-gray-500 mb-1">Porte</p>
-                            <div className="flex items-center gap-1.5 text-sm text-white">
-                              <Ruler className="w-3.5 h-3.5 text-gray-400" />
-                              {getSizeLabel(pet.size)}
+                          <>
+                            <div className="bg-white/5 rounded-lg p-2.5">
+                              <p className="text-xs text-gray-500 mb-1">Porte</p>
+                              <div className="flex items-center gap-1.5 text-sm text-white">
+                                <Ruler className="w-3.5 h-3.5 text-gray-400" />
+                                {getSizeLabel(pet.size)}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        {pet.type === PetType.DOG && (
-                          <div className="bg-white/5 rounded-lg p-2.5">
-                            <p className="text-xs text-gray-500 mb-1">Peso ref.</p>
-                            <p className="text-sm text-white">{getSizeDescription(pet.size)}</p>
-                          </div>
+                            <div className="bg-white/5 rounded-lg p-2.5">
+                              <p className="text-xs text-gray-500 mb-1">Peso ref.</p>
+                              <p className="text-sm text-white">{getSizeDescription(pet.size)}</p>
+                            </div>
+                          </>
                         )}
                       </div>
 
@@ -576,9 +744,7 @@ export default function MyPetsPage() {
               <div className="bg-white/5 border border-white/10 backdrop-blur-sm p-8 rounded-2xl mb-6 shadow-xl">
                 <PawPrint className="w-12 h-12 text-gray-500 mx-auto" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">
-                Nenhum pet cadastrado
-              </h3>
+              <h3 className="text-2xl font-bold text-white mb-2">Nenhum pet cadastrado</h3>
               <p className="text-gray-400 max-w-md font-medium mb-6">
                 Cadastre seus pets com informações detalhadas para encontrar o cuidador perfeito.
               </p>
@@ -593,14 +759,14 @@ export default function MyPetsPage() {
         </div>
       </main>
 
-      {/* Create/Edit Modal */}
+      {/* ── Modal criar/editar ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div 
+          <div
             className="bg-gray-900 rounded-2xl border border-white/10 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
+            {/* Header */}
             <div className="sticky top-0 bg-gray-900/95 backdrop-blur-sm border-b border-white/10 p-6 flex items-center justify-between rounded-t-2xl z-10">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#FF6B35]" />
@@ -614,13 +780,10 @@ export default function MyPetsPage() {
               </button>
             </div>
 
-            {/* Modal Form */}
+            {/* Form */}
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              {/* Campos obrigatórios */}
               <div className="bg-[#FF6B35]/5 border border-[#FF6B35]/20 rounded-lg p-3 mb-2">
-                <p className="text-xs text-[#FF6B35] font-medium">
-                  * Campos obrigatórios
-                </p>
+                <p className="text-xs text-[#FF6B35] font-medium">* Campos obrigatórios</p>
               </div>
 
               {/* Nome */}
@@ -659,7 +822,7 @@ export default function MyPetsPage() {
                       <button
                         key={type.value}
                         type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, type: type.value }))}
+                        onClick={() => setFormData((prev) => ({ ...prev, type: type.value }))}
                         className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1.5 ${
                           isSelected
                             ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-[#FF6B35] shadow-lg shadow-[#FF6B35]/10'
@@ -674,7 +837,7 @@ export default function MyPetsPage() {
                 </div>
               </div>
 
-              {/* Tamanho/Porte - Visível apenas para cachorros */}
+              {/* Porte */}
               {shouldShowSize ? (
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">
@@ -687,7 +850,7 @@ export default function MyPetsPage() {
                         <button
                           key={size.value}
                           type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, size: size.value }))}
+                          onClick={() => setFormData((prev) => ({ ...prev, size: size.value }))}
                           className={`p-3 rounded-xl border transition-all text-left ${
                             isSelected
                               ? 'border-[#FF6B35] bg-[#FF6B35]/10 shadow-lg shadow-[#FF6B35]/10'
@@ -695,8 +858,12 @@ export default function MyPetsPage() {
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg"><Dog className="w-5 h-5" /></span>
-                            <span className={`text-sm font-semibold ${isSelected ? 'text-[#FF6B35]' : 'text-white'}`}>
+                            <Dog className="w-5 h-5" />
+                            <span
+                              className={`text-sm font-semibold ${
+                                isSelected ? 'text-[#FF6B35]' : 'text-white'
+                              }`}
+                            >
                               {size.label}
                             </span>
                           </div>
@@ -711,11 +878,8 @@ export default function MyPetsPage() {
                   )}
                 </div>
               ) : (
-                /* Porte bloqueado para não-cachorros */
                 <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">
-                    Porte
-                  </label>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">Porte</label>
                   <div className="bg-white/5 border border-white/10 rounded-xl p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -811,7 +975,7 @@ export default function MyPetsPage() {
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Botões */}
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -830,8 +994,10 @@ export default function MyPetsPage() {
                       <Loader2 className="w-5 h-5 animate-spin" />
                       Salvando...
                     </>
+                  ) : editingPet ? (
+                    'Salvar alterações'
                   ) : (
-                    editingPet ? 'Salvar alterações' : 'Cadastrar pet'
+                    'Cadastrar pet'
                   )}
                 </button>
               </div>
@@ -840,7 +1006,7 @@ export default function MyPetsPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ── Modal confirmar exclusão ── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-gray-900 rounded-2xl border border-white/10 w-full max-w-md p-6 animate-in">
@@ -852,7 +1018,8 @@ export default function MyPetsPage() {
                 Remover {deleteTarget.name}?
               </h3>
               <p className="text-gray-400 leading-relaxed">
-                Esta ação não pode ser desfeita. Todas as informações deste pet serão permanentemente removidas.
+                Esta ação não pode ser desfeita. Todas as informações deste pet serão
+                permanentemente removidas.
               </p>
             </div>
             <div className="flex gap-3">

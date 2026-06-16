@@ -323,6 +323,14 @@ async findOne(profileId: string) {
     };
   }
 
+  getServiceTypes() {
+    return Object.entries(SERVICE_DEFAULTS).map(([type, info]) => ({
+      type,
+      ...info,
+      durations: type === 'walk' ? ['30min', '60min'] : ['60min'],
+    }));
+  }
+
   async updateProfileByUserId(userId: string, dto: UpdateCaregiverDto) {
     this.validateId(userId);
 
@@ -490,16 +498,30 @@ async findOne(profileId: string) {
   // --------------------------
   // REVIEWS
   // --------------------------
-  async findMyReviews(caregiverId: string) {
-    this.validateId(caregiverId);
+  async findMyReviews(id: string) {
+    this.validateId(id);
+    const objectId = new Types.ObjectId(id);
 
-    const bookings = await this.reviewModel
+    let bookings = await this.reviewModel
       .find({
-        caregiverId,
+        caregiverId: objectId,
         review: { $exists: true },
       })
       .populate('tutorId', 'name')
       .lean();
+
+    if (bookings.length === 0) {
+      const caregiverProfile = await this.caregiverProfileModel.findOne({ userId: id });
+      if (caregiverProfile) {
+        bookings = await this.reviewModel
+          .find({
+            caregiverId: caregiverProfile._id,
+            review: { $exists: true },
+          })
+          .populate('tutorId', 'name')
+          .lean();
+      }
+    }
 
     return bookings.map((b: any) => ({
       ...b.review,
