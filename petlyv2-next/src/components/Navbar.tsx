@@ -188,6 +188,20 @@ const Navbar = ({ onBeCaregiverClick, onAuthClick }: NavbarProps) => {
               <Heart className={`w-4 h-4 ${pathname === '/favoritos' ? 'fill-[#FF6B35]' : ''}`} />
               Favoritos
             </Link>
+            
+          )}
+          {isTutor && (
+            <Link
+              href="/my-pets"
+              onClick={() => setMobileOpen(false)}
+              className={`py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                pathname === '/my-pets' ? 'text-[#FF6B35]' : 'text-gray-300 hover:text-white'
+              }`}
+            >
+              <PawPrint className={`w-4 h-4 ${pathname === '/Meus Pets' ? 'fill-[#FF6B35]' : ''}`} />
+              Meus Pets
+            </Link>
+            
           )}
             {user ? (
               <div className="flex flex-col gap-2 mt-2 pt-4 border-t border-white/10">
