@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Star, MapPin, CheckCircle2, ChevronRight, Heart, Dog, Cat, Bird, PawPrint } from 'lucide-react';
+import { Star, MapPin, CheckCircle2, ChevronRight, Heart, Dog, Cat, Bird, PawPrint, Rat } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useFavorites } from '@/context/FavoritesContext';
 import { getUser } from '@/utils/api';
@@ -139,7 +139,7 @@ const CaregiverCard = ({ caregiver }: { caregiver: any }) => {
                   {p.type === 'dog' && <Dog className="w-4 h-4 text-gray-400 group-hover/pet:text-[#FF6B35] transition-colors" />}
                   {p.type === 'cat' && <Cat className="w-4 h-4 text-gray-400 group-hover/pet:text-[#FF6B35] transition-colors" />}
                   {p.type === 'bird' && <Bird className="w-4 h-4 text-gray-400 group-hover/pet:text-[#FF6B35] transition-colors" />}
-                  {p.type === 'other' && <PawPrint className="w-4 h-4 text-gray-400 group-hover/pet:text-[#FF6B35] transition-colors" />}
+                  {p.type === 'other' && <Rat className="w-4 h-4 text-gray-400 group-hover/pet:text-[#FF6B35] transition-colors" />}
                   <span className="text-[10px] text-gray-300">{PET_TYPE_LABELS[p.type] || p.type}{sizeInfo}</span>
                 </div>
               );

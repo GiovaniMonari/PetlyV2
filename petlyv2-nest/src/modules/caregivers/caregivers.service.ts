@@ -502,52 +502,79 @@ async findOne(profileId: string) {
     this.validateId(id);
     const objectId = new Types.ObjectId(id);
 
+    // `caregiverId` in bookings stores the caregiver's **userId**, not the profile _id.
+    // We try both to be resilient to different callers.
     let bookings = await this.reviewModel
       .find({
         caregiverId: objectId,
-        review: { $exists: true },
+        'review.rating': { $exists: true },
       })
-      .populate('tutorId', 'name')
+      .populate('tutorId', 'name avatar')
       .lean();
 
     if (bookings.length === 0) {
-      const caregiverProfile = await this.caregiverProfileModel.findOne({ userId: id });
+      // Caller might have passed the caregiver profile _id — resolve the userId
+      const caregiverProfile = await this.caregiverProfileModel
+        .findById(objectId)
+        .lean();
       if (caregiverProfile) {
         bookings = await this.reviewModel
           .find({
-            caregiverId: caregiverProfile._id,
-            review: { $exists: true },
+            caregiverId: caregiverProfile.userId,
+            'review.rating': { $exists: true },
           })
-          .populate('tutorId', 'name')
+          .populate('tutorId', 'name avatar')
           .lean();
       }
     }
 
     return bookings.map((b: any) => ({
       ...b.review,
-      tutorName: b.tutorId?.name,
+      tutorName: b.tutorId?.name ?? 'Tutor',
+      tutorAvatar: b.tutorId?.avatar ?? null,
+      serviceType: b.serviceType ?? null,
+      endDate: b.endDate ?? null,
     }));
   }
 
-  async updateCaregiverRating(caregiverId: string) {
-    const reviews = await this.reviewModel
-      .find({
-        caregiverId,
-        review: { $exists: true },
-      })
-      .lean();
+  async updateCaregiverRating(caregiverUserId: string) {
+    // `caregiverId` on bookings stores the caregiver's **userId**.
+    const userObjectId = new Types.ObjectId(caregiverUserId);
 
-    const ratings = reviews.map(r => r.review.rating).filter(Boolean);
+    const [stats] = await this.reviewModel.aggregate<{
+      _id: null;
+      avgRating: number;
+      reviewsCount: number;
+    }>([
+      {
+        $match: {
+          caregiverId: userObjectId,
+          'review.rating': { $exists: true },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          avgRating: { $avg: '$review.rating' },
+          reviewsCount: { $sum: 1 },
+        },
+      },
+    ]);
 
-    const rating = ratings.length
-      ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
-      : 0;
+    const rating = stats?.avgRating ?? 0;
+    const reviewsCount = stats?.reviewsCount ?? 0;
 
-    await this.caregiverProfileModel.findByIdAndUpdate(caregiverId, {
-      rating,
-      reviewsCount: ratings.length,
-    });
-    await this.invalidateCaregiverCache(caregiverId);
+    // Update the caregiver profile that belongs to this user
+    const profile = await this.caregiverProfileModel.findOneAndUpdate(
+      { userId: userObjectId },
+      { rating: Math.round(rating * 10) / 10, reviewsCount },
+      { new: true },
+    );
+
+    if (profile) {
+      await this.invalidateCaregiverCache(profile._id.toString());
+    }
+    await this.invalidateCaregiverCache(caregiverUserId);
   }
   // --------------------------
   // HELPERS

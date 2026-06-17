@@ -16,6 +16,7 @@ import {
   Activity,
   ChevronRight,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -64,6 +65,14 @@ function parseDateOnly(dateStr?: string): Date | null {
   const [year, month, day] = datePart.split('-').map(Number);
   if (!year || !month || !day) return null;
   return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function isBookingExpired(endDate?: string): boolean {
+  const end = parseDateOnly(endDate);
+  if (!end) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return end < today;
 }
 
 function isTodayInBookingRange(startDate?: string, endDate?: string): boolean {
@@ -524,9 +533,34 @@ export default function DashboardPage() {
                                   ) : (
                                     <span className="text-gray-500 text-xs">Pet não informado</span>
                                   )}
+
                                 </div>
                               </div>
                             </div>
+
+                            <div className='sm:col-span-2'>
+                              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                                Tutor
+                              </p>
+                              <div className="text-white font-medium bg-black/40 px-3 py-2 rounded-xl border border-white/5 flex items-center gap-3">
+                                  {booking.tutorId?.avatar ? (
+                                    <Image
+                                      src={booking.tutorId.avatar}
+                                      alt={booking.tutorId.name}
+                                      width={40}
+                                      height={40}
+                                      className="w-10 h-10 rounded-full object-cover shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                                      <span className="text-sm font-bold text-gray-400 uppercase">
+                                        {booking.tutorId?.name?.charAt(0)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <span>{booking.tutorId?.name || 'Tutor não informado'}</span>
+                                </div>
+                              </div>
                           </div>
 
                           {/* Preço e ações */}
@@ -547,21 +581,30 @@ export default function DashboardPage() {
 
                             <div className="mt-4 space-y-2">
                               {booking.status === 'pending' && (
-                                <>
-                                  <button
-                                    onClick={() => handleConfirmClick(booking)}
-                                    className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" /> Aceitar
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancelBooking(booking._id)}
-                                    className="w-full py-2.5 bg-red-500/8 hover:bg-red-500/15 border border-red-500/20 hover:border-red-500/40 text-red-400 hover:text-red-300 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
-                                  >
-                                    <XCircle className="w-4 h-4" /> Recusar
-                                  </button>
-                                </>
-                              )}
+                                  <>
+                                    {isBookingExpired(booking.endDate) ? (
+                                      <div className="w-full py-2.5 bg-white/5 border border-white/8 text-gray-500 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
+                                        <XCircle className="w-4 h-4" />
+                                        Reserva expirada
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={() => handleConfirmClick(booking)}
+                                          className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                                        >
+                                          <CheckCircle2 className="w-4 h-4" /> Aceitar
+                                        </button>
+                                        <button
+                                          onClick={() => handleCancelBooking(booking._id)}
+                                          className="w-full py-2.5 bg-red-500/8 hover:bg-red-500/15 border border-red-500/20 hover:border-red-500/40 text-red-400 hover:text-red-300 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                                        >
+                                          <XCircle className="w-4 h-4" /> Recusar
+                                        </button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
 
                               {booking.status === 'confirmed' && (
                                 <button

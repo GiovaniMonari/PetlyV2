@@ -782,7 +782,21 @@ const handleSaveProfile = async () => {
                             <div>
                               <span className="text-xs font-semibold text-gray-500 uppercase block mb-1">Cuidador</span>
                               <div className="text-white font-medium bg-black/40 px-3 py-2 rounded-lg border border-white/5 flex items-center gap-2 capitalize">
-                                <PawPrint className="w-4 h-4 text-[#FF6B35]" />
+                                {booking.caregiverId?.avatar ? (
+                                  <Image
+                                    src={booking.caregiverId.avatar}
+                                    alt={booking.caregiverId.name}
+                                    width={40}
+                                    height={40}
+                                    className="w-8 h-8 rounded-full object-cover shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                                    <span className="text-sm font-bold text-gray-400 uppercase">
+                                      {booking.caregiverId?.name?.charAt(0)}
+                                    </span>
+                                  </div>
+                                )}
                                 {booking.caregiverId?.name || 'Cuidador não informado'}
                               </div>
                             </div>

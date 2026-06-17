@@ -291,7 +291,7 @@ export class BookingsService {
   async findByCaregiver(caregiverId: string): Promise<BookingDocument[]> {
     const bookings = await this.bookingModel
       .find({ caregiverId: new Types.ObjectId(caregiverId) })
-      .populate('tutorId', 'name email')
+      .populate('tutorId', 'name email avatar')
       .populate('petId')
       .sort({ createdAt: -1 })
       .exec();
@@ -310,7 +310,7 @@ export class BookingsService {
 
     const booking = await this.bookingModel
       .findById(id)
-      .populate('tutorId', 'name email')
+      .populate('tutorId', 'name email avatar')
       .populate('caregiverId', 'name avatar location rating price')
       .populate('petId')
       .exec();
@@ -596,31 +596,9 @@ export class BookingsService {
   }
 
   private async recalculateCaregiverRating(caregiverId: string): Promise<void> {
-    const caregiverObjectId = new Types.ObjectId(caregiverId);
-
-    const [stats] = await this.bookingModel.aggregate<{
-      _id: null;
-      avgRating: number;
-      reviewsCount: number;
-    }>([
-      {
-        $match: {
-          caregiverId: caregiverObjectId,
-          'review.rating': { $exists: true },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          avgRating: { $avg: '$review.rating' },
-          reviewsCount: { $sum: 1 },
-        },
-      },
-    ]);
-
-    await this.caregiversService.updateCaregiverRating(
-      caregiverId,
-    );
+    // Delegates to caregiversService which performs the correct aggregation
+    // against the bookings collection using the caregiver's userId field.
+    await this.caregiversService.updateCaregiverRating(caregiverId);
   }
 
   private async checkAvailability(

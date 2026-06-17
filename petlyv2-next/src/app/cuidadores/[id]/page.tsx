@@ -28,6 +28,7 @@ import Footer from '@/components/Footer';
 import {
   apiCreateBooking,
   apiGetCaregiver,
+  apiGetCaregiverReviews,
   apiGetMyBookings,
   apiGetMyPets,
   apiGetProfile,
@@ -142,6 +143,8 @@ export default function CaregiverDetailPage() {
   const [myPets, setMyPets] = useState<any[]>([]);
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
   const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [publicReviews, setPublicReviews] = useState<any[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState('');
 
@@ -718,17 +721,34 @@ export default function CaregiverDetailPage() {
       };
 
       setCaregiver(normalizedCaregiver);
-      } catch {
-        if (isMounted) {
-          setPageError('Não foi possível carregar as informações do cuidador.');
-          setCaregiver(null);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
+
+      // Load public reviews — using the caregiver's userId (caregiverData.profile.userId)
+      const cgUserId =
+        caregiverData.profile?.userId?._id ??
+        caregiverData.profile?.userId ??
+        caregiverData.id;
+      if (cgUserId) {
+        setIsLoadingReviews(true);
+        try {
+          const reviews = await apiGetCaregiverReviews(String(cgUserId));
+          setPublicReviews(Array.isArray(reviews) ? reviews : []);
+        } catch {
+          setPublicReviews([]);
+        } finally {
+          setIsLoadingReviews(false);
         }
       }
-    };
+    } catch {
+      if (isMounted) {
+        setPageError('Não foi possível carregar as informações do cuidador.');
+        setCaregiver(null);
+      }
+    } finally {
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }
+  };
 
     if (caregiverId) {
       loadPage();
@@ -741,7 +761,21 @@ export default function CaregiverDetailPage() {
 
   const refreshCaregiver = async () => {
     const updatedCaregiver = await apiGetCaregiver(caregiverId);
-    setCaregiver(updatedCaregiver);
+    const normalizedCaregiver = {
+      ...updatedCaregiver.profile,
+      ...updatedCaregiver.user,
+      id: updatedCaregiver.id,
+    };
+    setCaregiver(normalizedCaregiver);
+  };
+
+  const refreshPublicReviews = async (id: string) => {
+    try {
+      const data = await apiGetCaregiverReviews(id);
+      setPublicReviews(Array.isArray(data) ? data : []);
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleCreateBooking = async () => {
@@ -901,11 +935,22 @@ export default function CaregiverDetailPage() {
         comment: reviewComment.trim() || undefined,
       });
 
-      setReviewSuccess('Avaliação enviada com sucesso. Obrigado pelo feedback.');
+      setReviewSuccess('Avaliação enviada com sucesso. Obrigado pelo feedback!');
       setReviewComment('');
       setReviewRating(5);
+      setSelectedBookingId('');
 
-      await Promise.all([fetchMyBookings(), refreshCaregiver()]);
+      // Refresh everything so the new review appears publicly immediately
+      await Promise.all([
+        fetchMyBookings(),
+        refreshCaregiver(),
+      ]);
+
+      // Refresh public review list
+      const cgUserId = caregiver?.userId ?? caregiver?._id;
+      if (cgUserId) {
+        await refreshPublicReviews(String(cgUserId));
+      }
     } catch (err: any) {
       setReviewError(err?.message || 'Não foi possível enviar a avaliação.');
     } finally {
@@ -1603,8 +1648,122 @@ export default function CaregiverDetailPage() {
           </div>
         )}
 
+        {/* ===== PUBLIC REVIEWS SECTION ===== */}
         <section className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
-          <h2 className="text-2xl font-bold text-white mb-1">Avaliação pós-serviço</h2>
+          {/* Header */}
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white">Avaliações</h2>
+              <p className="text-sm text-gray-400 mt-0.5">
+                {publicReviews.length > 0
+                  ? `${publicReviews.length} avaliação${publicReviews.length !== 1 ? 'ões' : ''} de tutores`
+                  : 'Nenhuma avaliação ainda'}
+              </p>
+            </div>
+            {(caregiver.reviewsCount ?? 0) > 0 && (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-1.5">
+                  {[1,2,3,4,5].map(i => (
+                    <Star
+                      key={i}
+                      className={`w-4 h-4 ${
+                        i <= Math.round(caregiver.rating ?? 0)
+                          ? 'text-yellow-400 fill-yellow-400'
+                          : 'text-white/10'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-white font-bold text-xl leading-none">
+                  {(caregiver.rating ?? 0).toFixed(1)}
+                  <span className="text-gray-500 text-sm font-normal"> / 5</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {isLoadingReviews ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 text-[#FF6B35] animate-spin" />
+            </div>
+          ) : publicReviews.length > 0 ? (
+            <div className="space-y-4">
+              {publicReviews.map((review, idx) => (
+                <div
+                  key={idx}
+                  className="group bg-black/30 hover:bg-black/50 border border-white/8 hover:border-white/15 rounded-2xl p-5 transition-all duration-200"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      {review.tutorAvatar ? (
+                        <img
+                          src={review.tutorAvatar}
+                          alt={review.tutorName}
+                          className="w-9 h-9 rounded-xl object-cover border border-white/10"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#A23B72]/20 border border-white/10 flex items-center justify-center text-white font-bold text-sm uppercase">
+                          {(review.tutorName ?? 'T').charAt(0)}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-white font-semibold text-sm">{review.tutorName ?? 'Tutor'}</p>
+                        {review.endDate && (
+                          <p className="text-gray-500 text-xs">
+                            {new Date(review.endDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      {[1,2,3,4,5].map(i => (
+                        <Star
+                          key={i}
+                          className={`w-3.5 h-3.5 ${
+                            i <= review.rating
+                              ? 'text-yellow-400 fill-yellow-400'
+                              : 'text-white/10'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {review.comment ? (
+                    <p className="text-gray-300 text-sm leading-relaxed pl-12">
+                      &ldquo;{review.comment}&rdquo;
+                    </p>
+                  ) : (
+                    <p className="text-gray-600 text-xs italic pl-12">Sem comentário.</p>
+                  )}
+
+                  {review.serviceType && (
+                    <div className="mt-3 pl-12">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 border border-white/8 text-gray-500 text-xs">
+                        <PawPrint className="w-3 h-3" />
+                        {review.serviceType}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-yellow-500/8 border border-yellow-500/15 flex items-center justify-center mx-auto mb-4">
+                <Star className="w-6 h-6 text-yellow-500/30" />
+              </div>
+              <p className="text-gray-500 text-sm">Este cuidador ainda não recebeu avaliações.</p>
+              <p className="text-gray-600 text-xs mt-1">As avaliações aparecem após serviços concluídos.</p>
+            </div>
+          )}
+        </section>
+
+         <div className="mx-auto my-10 h-0.5 w-20 rounded-full bg-orange-500"></div>
+
+        {/* ===== FORM: AVALIAR (só tutores autenticados) ===== */}
+        <section className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8">
+          <h2 className="text-2xl font-bold text-white mb-1">Avaliar este cuidador</h2>
           <p className="text-sm text-gray-400 mb-6">
             A avaliação fica disponível somente depois que a reserva for concluída.
           </p>
@@ -1650,17 +1809,19 @@ export default function CaregiverDetailPage() {
                         <button
                           key={value}
                           onClick={() => setReviewRating(value)}
-                          className="p-1"
+                          className="p-1 transition-transform hover:scale-110"
                           type="button"
                         >
                           <Star
-                            className={`w-7 h-7 transition-colors ${value <= reviewRating
+                            className={`w-8 h-8 transition-colors ${
+                              value <= reviewRating
                                 ? 'text-yellow-400 fill-yellow-400'
-                                : 'text-gray-600'
-                              }`}
+                                : 'text-gray-600 hover:text-yellow-500'
+                            }`}
                           />
                         </button>
                       ))}
+                      <span className="ml-2 text-sm text-gray-400">{reviewRating}/5</span>
                     </div>
                   </div>
 
@@ -1672,8 +1833,10 @@ export default function CaregiverDetailPage() {
                       value={reviewComment}
                       onChange={(event) => setReviewComment(event.target.value)}
                       placeholder="Como foi a experiência com este cuidador?"
-                      className="w-full min-h-[100px] bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 resize-y"
+                      maxLength={500}
+                      className="w-full min-h-[110px] bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-[#FF6B35]/50 focus:ring-1 focus:ring-[#FF6B35]/50 resize-y text-sm"
                     />
+                    <p className="text-xs text-gray-600 mt-1 text-right">{reviewComment.length}/500</p>
                   </div>
 
                   {reviewError && (
@@ -1692,7 +1855,7 @@ export default function CaregiverDetailPage() {
                   <button
                     onClick={handleSubmitReview}
                     disabled={isSubmittingReview}
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#06A77D] text-white font-semibold hover:bg-[#05936e] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#06A77D] text-white font-semibold hover:bg-[#05936e] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSubmittingReview ? (
                       <>
@@ -1726,9 +1889,19 @@ export default function CaregiverDetailPage() {
                         <p className="text-gray-400 mb-2">
                           Concluída em {formatDateSafe(booking.endDate)}
                         </p>
-                        <p className="text-yellow-400 font-semibold mb-1">
-                          Nota: {booking.review.rating}/5
-                        </p>
+                        <div className="flex items-center gap-1 mb-1">
+                          {[1,2,3,4,5].map(i => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${
+                                i <= booking.review.rating
+                                  ? 'text-yellow-400 fill-yellow-400'
+                                  : 'text-white/10'
+                              }`}
+                            />
+                          ))}
+                          <span className="text-yellow-400 text-xs font-semibold ml-1">{booking.review.rating}/5</span>
+                        </div>
                         {booking.review.comment && (
                           <p className="text-gray-300">{booking.review.comment}</p>
                         )}
